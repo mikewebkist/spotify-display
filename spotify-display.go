@@ -1,49 +1,80 @@
-// Command profile gets the public profile information about a Spotify user.
 package main
 
 import (
-	"context"
-	"flag"
 	"fmt"
 	"log"
-	"os"
+	"net/http"
 
-	"golang.org/x/oauth2/clientcredentials"
+	"golang.org/x/oauth2"
 
 	"github.com/zmb3/spotify"
 )
 
-var userID = flag.String("user", "", "the Spotify user ID to look up")
+const redirectURI = "http://localhost:8080/callback"
+const tokenPath = "/tmp/spotify-display.json"
+
+var token oauth2.Token
+
+var (
+	auth  = spotify.NewAuthenticator(redirectURI, spotify.ScopeUserReadPrivate, spotify.ScopeUserReadPlaybackState)
+	ch    = make(chan oauth2.Token)
+	state = "abc123"
+)
+
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
 
 func main() {
-	flag.Parse()
+	if err := Load(tokenPath, &token); err != nil {
+		http.HandleFunc("/callback", completeAuth)
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			log.Println("Got request for:", r.URL.String())
+		})
+		go http.ListenAndServe(":8080", nil)
 
-	if *userID == "" {
-		fmt.Fprintf(os.Stderr, "Error: missing user ID\n")
-		flag.Usage()
-		return
-	}
+		url := auth.AuthURL(state)
+		fmt.Println("Please log in to Spotify by visiting the following page in your browser:", url)
 
-	config := &clientcredentials.Config{
-		ClientID:     os.Getenv("SPOTIFY_ID"),
-		ClientSecret: os.Getenv("SPOTIFY_SECRET"),
-		TokenURL:     spotify.TokenURL,
+		// wait for auth to complete
+		token = <-ch
 	}
-	token, err := config.Token(context.Background())
+	client := auth.NewClient(&token)
+
+	// use the client to make calls that require authorization
+	user, err := client.CurrentUser()
+	check(err)
+
+	fmt.Printf("Now Playing for %s [%s]\n", user.DisplayName, user.ID)
+	np, err := client.PlayerCurrentlyPlaying()
+
 	if err != nil {
-		log.Fatalf("couldn't get token: %v", err)
+		fmt.Println(err)
 	}
 
-	client := spotify.Authenticator{}.NewClient(token)
-	user, err := client.GetUsersPublicProfile(spotify.ID(*userID))
+	if np.Playing {
+		fmt.Printf("\n%s\n%s\n%s\n", np.Item.Album.Name, np.Item.Name, np.Item.Artists[0].Name)
+	} else {
+		fmt.Printf("Nothing playing...\n")
+	}
+
+	if err := Save(tokenPath, &token); err != nil {
+		log.Fatalln(err)
+	}
+}
+
+func completeAuth(w http.ResponseWriter, r *http.Request) {
+	tok, err := auth.Token(state, r)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		return
+		http.Error(w, "Couldn't get token", http.StatusForbidden)
+		log.Fatal(err)
 	}
-
-	fmt.Println("User ID:", user.ID)
-	fmt.Println("Display name:", user.DisplayName)
-	fmt.Println("Spotify URI:", string(user.URI))
-	fmt.Println("Endpoint:", user.Endpoint)
-	fmt.Println("Followers:", user.Followers.Count)
+	if st := r.FormValue("state"); st != state {
+		http.NotFound(w, r)
+		log.Fatalf("State mismatch: %s != %s\n", st, state)
+	}
+	// use the token to get an authenticated client
+	ch <- *tok
 }
