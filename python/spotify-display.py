@@ -37,8 +37,6 @@ red = 0
 green = 0
 blue = 0
 
-pos = offscreen_canvas.width
-
 sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=os.environ["SPOTIFY_ID"],
                                                client_secret=os.environ["SPOTIFY_SECRET"],
                                                redirect_uri="http://localhost:8080/callback",
@@ -71,32 +69,32 @@ while True:
         line3 = "playing..."
         image = getImage("localhost:///cloud.png")
 
-    length = max(graphics.DrawText(offscreen_canvas, font, 0, 15, textColor, line1),
-                 graphics.DrawText(offscreen_canvas, font, 0, 25, textColor, line3))
+    length = max(graphics.DrawText(offscreen_canvas, font, 0, 20, textColor, line1),
+                 graphics.DrawText(offscreen_canvas, font, 0, 30, textColor, line3))
 
-    length += 32
-
-    if length > pos:
+    if length > offscreen_canvas.width:
         # If the text is wider than the view, scroll it.
+        pos = offscreen_canvas.width
+        timing = 10.0 / (length + offscreen_canvas.width)
         while pos + length > 0:
             offscreen_canvas.Clear()
             offscreen_canvas.Fill(red, green, blue)
-            offscreen_canvas.SetImage(image.convert('RGB'), 33, 0)
+            offscreen_canvas.SetImage(image.convert('RGB'), 32, 0)
 
-            graphics.DrawText(offscreen_canvas, font, pos + 32, 15, textColor, line1)
-            graphics.DrawText(offscreen_canvas, font, pos + 32, 25, textColor, line3)
+            graphics.DrawText(offscreen_canvas, font, pos, 20, textColor, line1)
+            graphics.DrawText(offscreen_canvas, font, pos, 30, textColor, line3)
 
             pos -= 1
-            time.sleep(0.07)
             offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
+            time.sleep(timing)
 
     else:
         # If all the text fits, don't scroll.
         offscreen_canvas.Clear()
         offscreen_canvas.Fill(red, green, blue)
 
-        graphics.DrawText(offscreen_canvas, font, 2, 15, textColor, line1)
-        graphics.DrawText(offscreen_canvas, font, 2, 25, textColor, line3)
+        graphics.DrawText(offscreen_canvas, font, 0, 20, textColor, line1)
+        graphics.DrawText(offscreen_canvas, font, 0, 30, textColor, line3)
 
         offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
         time.sleep(5)
