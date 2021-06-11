@@ -5,19 +5,18 @@ import os.path
 from spotipy.oauth2 import SpotifyOAuth
 import simplejson
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
-from PIL import Image, ImageOps
+from PIL import Image, ImageEnhance
 import urllib
 
 def getImage(url):
     m = url.rsplit('/', 1)
-    print(m[-1])
     filename = "imagecache/%s" % m[-1]
     if not os.path.isfile(filename):
         print("Getting %s" % url)
         urllib.urlretrieve(url, filename)
 
     image = Image.open(filename)
-    image.thumbnail((28, 28), Image.NEAREST)
+    image.thumbnail((32, 32), Image.NEAREST)
     return image
 
 # --led-no-hardware-pulse=1 --led-cols=64 --led-rows=32 --led-gpio-mapping=adafruit-hat
@@ -61,15 +60,16 @@ while True:
         line1 = np["item"]["name"]
         line2 = np["item"]["album"]["name"]
         line3 = np["item"]["artists"][0]["name"]
-        print("%s" % np["item"]["album"]["images"][2]["url"])
-        image = getImage(np["item"]["album"]["images"][2]["url"])
+        image = getImage(np["item"]["album"]["images"][1]["url"])
+        image = ImageEnhance.Contrast(image).enhance(1.25)
+        image = ImageEnhance.Brightness(image).enhance(0.3)
+        image.show()
 
     else:
         line1 = "Nothing"
         line2 = ""
         line3 = "playing..."
-        image = getImage("https://freeiconshop.com/wp-content/uploads/edd/cloud-outline.png")
-        image = ImageOps.invert(image.convert('RGB'))
+        image = getImage("localhost:///cloud.png")
 
     length = max(graphics.DrawText(offscreen_canvas, font, 0, 15, textColor, line1),
                  graphics.DrawText(offscreen_canvas, font, 0, 25, textColor, line3))
@@ -81,7 +81,7 @@ while True:
         while pos + length > 0:
             offscreen_canvas.Clear()
             offscreen_canvas.Fill(red, green, blue)
-            offscreen_canvas.SetImage(image.convert('RGB'), 34, 2)
+            offscreen_canvas.SetImage(image.convert('RGB'), 33, 0)
 
             graphics.DrawText(offscreen_canvas, font, pos + 32, 15, textColor, line1)
             graphics.DrawText(offscreen_canvas, font, pos + 32, 25, textColor, line3)
