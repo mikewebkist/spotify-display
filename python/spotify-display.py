@@ -86,7 +86,7 @@ def main():
 
             # Art looks slightly better with more contrast and a litte darker
             image = getImage(np["item"]["album"]["images"][1]["url"])
-            image = ImageEnhance.Contrast(image).enhance(1.25)
+            image = ImageEnhance.Contrast(image).enhance(2.0)
             image = ImageEnhance.Brightness(image).enhance(0.3)
             image.show()
 
@@ -100,7 +100,7 @@ def main():
                 # timing = 5.0 / (length + options.cols)
                 doneAt = time.time() * 1000.0 + ms_pause
 
-                timing = 0.02
+                timing = 0.025
                 print("%4.f" % (time.time()))
                 # timing = ms_pause / 1000.0 / (length + options.cols)
 
