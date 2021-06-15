@@ -4,13 +4,13 @@ import time
 import os
 import os.path
 from spotipy.oauth2 import SpotifyOAuth
+from spotipy.cache_handler import CacheFileHandler
 import simplejson
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
 from PIL import Image, ImageEnhance
 import urllib
 
 logging.basicConfig(level=logging.WARNING)
-
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ def getImage(url):
     filename = "imagecache/%s" % m[-1]
     if not os.path.isfile(filename):
         logger.debug("Getting %s" % url)
-        urllib.urlretrieve(url, filename)
+        urllib.request.urlretrieve(url, filename)
 
     image = Image.open(filename)
     image.thumbnail((32, 32), Image.NEAREST)
@@ -28,10 +28,11 @@ def getImage(url):
 # --led-no-hardware-pulse=1 --led-cols=64 --led-rows=32 --led-gpio-mapping=adafruit-hat
 
 options = RGBMatrixOptions()
-options.hardware_mapping = "adafruit-hat"
+options.hardware_mapping = "adafruit-hat-pwm"
 options.rows = 32
 options.cols = 64
 options.disable_hardware_pulsing = True
+options.gpio_slowdown = 4
 
 font = graphics.Font()
 font.LoadFont("font.bdf")
@@ -40,11 +41,13 @@ red = 0
 green = 0
 blue = 0
 
+cache_handler = CacheFileHandler(cache_path=".spotipy-cache")
+
 def main():
     matrix = RGBMatrix(options=options)
     offscreen_canvas = matrix.CreateFrameCanvas()
 
-    logging.warning("testing...")
+
     sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=os.environ["SPOTIFY_ID"],
                                                    client_secret=os.environ["SPOTIFY_SECRET"],
                                                    redirect_uri="http://localhost:8080/callback",
@@ -52,9 +55,8 @@ def main():
                                                    open_browser=False,
                                                    scope="user-library-read,user-read-playback-state"))
 
-    print("I think it's logged in...")
     user = sp.current_user()
-    print("Now Playing for %s [%s]\n" % (user["display_name"], user["id"]))
+    logger.info("Now Playing for %s [%s]\n" % (user["display_name"], user["id"]))
 
     # Default pause between iterations is 10 seconds
     not_playing_wait = 1.0
@@ -62,18 +64,18 @@ def main():
         try:
             np = sp.current_user_playing_track()
         except:
-            print("Problem caught...")
-            print(simplejson.dumps(np))
+            logger.warning("Problem getting current_user_playing_track")
+            logger.warning(simplejson.dumps(np))
             time.sleep(30)
             continue
 
-        if np and np["is_playing"]:
+        if np and np["is_playing"] and np["item"]:
             not_playing_wait = 1.0
 
             line1 = np["item"]["name"]
             line2 = np["item"]["album"]["name"]
             line3 = np["item"]["artists"][0]["name"]
-            print("%s - %s" % (line1, line3))
+            logger.info(u'%s - %s' % (line1, line3))
 
             # Default delay is 10% of the remaining song length
             ms_remain = np["item"]["duration_ms"] - np["progress_ms"]
@@ -82,13 +84,11 @@ def main():
             else:
                 ms_pause = np["item"]["duration_ms"] / 10.0
 
-            print("  %d of %d. Pause for %0.2f secs." % (ms_remain, np["item"]["duration_ms"], ms_pause / 1000))
-
             # Art looks slightly better with more contrast and a litte darker
             image = getImage(np["item"]["album"]["images"][1]["url"])
-            image = ImageEnhance.Contrast(image).enhance(2.0)
-            image = ImageEnhance.Brightness(image).enhance(0.3)
-            image.show()
+            image = ImageEnhance.Contrast(image).enhance(1.25)
+            image = ImageEnhance.Brightness(image).enhance(0.25)
+            image = image.resize((32, 32), resample=Image.HAMMING)
 
             # Length of the longest line of text, in pixels.
             length = max(graphics.DrawText(offscreen_canvas, font, 0, 20, textColor, line1),
@@ -101,7 +101,6 @@ def main():
                 doneAt = time.time() * 1000.0 + ms_pause
 
                 timing = 0.025
-                print("%4.f" % (time.time()))
                 # timing = ms_pause / 1000.0 / (length + options.cols)
 
                 while (time.time() * 1000.0 < doneAt):
@@ -134,7 +133,7 @@ def main():
             offscreen_canvas.Clear()
             offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
 
-            print("Nothing playing...Sleep for %0.2f secs" % (not_playing_wait))
+            logger.info("Nothing playing...Sleep for %0.2f secs" % (not_playing_wait))
             time.sleep(not_playing_wait)
 
             not_playing_wait *= 2
