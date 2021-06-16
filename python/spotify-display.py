@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import spotipy
 import logging
 import time
@@ -31,7 +33,7 @@ options = RGBMatrixOptions()
 options.hardware_mapping = "adafruit-hat-pwm"
 options.rows = 32
 options.cols = 64
-options.disable_hardware_pulsing = True
+options.disable_hardware_pulsing = False
 options.gpio_slowdown = 4
 
 font = graphics.Font()
@@ -63,7 +65,7 @@ def main():
     while True:
         try:
             np = sp.current_user_playing_track()
-        except:
+        except (ConnectionResetError, requests.exceptions.ConnectionError, requests.exceptions.ConnectionError, NameError):
             logger.warning("Problem getting current_user_playing_track")
             logger.warning(simplejson.dumps(np))
             time.sleep(30)
