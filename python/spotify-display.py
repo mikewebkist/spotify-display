@@ -16,6 +16,11 @@ import requests
 
 basepath = os.path.dirname(sys.argv[0])
 
+username = "mikewebkist"
+
+if len(sys.argv) > 1:
+    username = sys.argv[1]
+
 logging.basicConfig(filename='/tmp/spotify-matrix.log',level=logging.INFO)
 
 logger = logging.getLogger(__name__)
@@ -31,7 +36,7 @@ font = graphics.Font()
 font.LoadFont("%s/font.bdf" % (basepath))
 textColor = graphics.Color(128, 128, 128)
 
-cache_handler = CacheFileHandler(cache_path="/etc/spotify-matrix/mikewebkist")
+cache_handler = CacheFileHandler(cache_path="/etc/spotify-matrix/" + username)
 image_cache = "%s/imagecache" % (basepath)
 
 def getImage(url):
@@ -53,7 +58,7 @@ def main():
     sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=os.environ["SPOTIFY_ID"],
                                                    client_secret=os.environ["SPOTIFY_SECRET"],
                                                    cache_handler=cache_handler,
-                                                   redirect_uri="http://localhost:8080/callback",
+                                                   redirect_uri="http://matrix.local:8080/callback",
                                                    show_dialog=True,
                                                    open_browser=False,
                                                    scope="user-library-read,user-read-playback-state"))
