@@ -36,10 +36,15 @@ options.gpio_slowdown = 3
 
 font = graphics.Font()
 font.LoadFont("%s/font.bdf" % (basepath))
-textColor = graphics.Color(128, 128, 128)
 
 cache_handler = CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username))
 image_cache = "%s/imagecache" % (basepath)
+
+def gamma(value):
+    gamma = 2.8
+    max_in = 255
+    max_out = 255
+    return pow(value / max_in, gamma) * max_out
 
 def getImage(url):
     m = url.rsplit('/', 1)
@@ -50,10 +55,12 @@ def getImage(url):
 
     image = Image.open(filename)
     image = ImageEnhance.Contrast(image).enhance(1.5)
-    image = ImageEnhance.Brightness(image).enhance(0.25)
+    image = ImageEnhance.Brightness(image).enhance(gamma(150) / 255.0)
     image = image.resize((32, 32), resample=Image.LANCZOS)
 
     return image
+
+textColor = graphics.Color(gamma(192), gamma(192), gamma(192))
 
 def main():
     matrix = RGBMatrix(options=options)
@@ -74,6 +81,7 @@ def main():
     cooldownUntil = time.time() * 1000.0
     nowPlaying = None
     lastSong = ""
+    firstRunThisSong = True
 
     while True:
 
@@ -109,6 +117,9 @@ def main():
             if lastSong != nowPlaying["item"]["id"]:
                 logger.info(u'%s - %s' % (trackName, artistName))
                 lastSong = nowPlaying["item"]["id"]
+                firstSongThisRun = True
+            else:
+                firstSongThisRun = False
 
             # Art looks slightly better with more contrast and a litte darker
             image = getImage(nowPlaying["item"]["album"]["images"][1]["url"])
@@ -116,6 +127,14 @@ def main():
             # Length of the longest line of text, in pixels.
             length = max(graphics.DrawText(offscreen_canvas, font, 0, 20, textColor, trackName),
                          graphics.DrawText(offscreen_canvas, font, 0, 30, textColor, artistName))
+
+            if firstSongThisRun:
+                offscreen_canvas.Clear()
+                for x in range(255):
+                    imageDim = ImageEnhance.Brightness(image).enhance(gamma(x) / 255.0)
+                    offscreen_canvas.SetImage(imageDim.convert('RGB'), 32, 0)
+                    offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
+                time.sleep(0.5)
 
             # If either line of text is longer than the display, scroll
             if length > options.cols:
@@ -137,6 +156,13 @@ def main():
             else:
                 offscreen_canvas.Clear()
                 offscreen_canvas.SetImage(image.convert('RGB'), 32, 0)
+
+                if firstSongThisRun:
+                    for x in range(192):
+                        textColorFade = graphics.Color(gamma(x), gamma(x), gamma(x))
+                        graphics.DrawText(offscreen_canvas, font, 0, 20, textColorFade, trackName)
+                        graphics.DrawText(offscreen_canvas, font, 0, 30, textColorFade, artistName)
+                        offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
 
                 graphics.DrawText(offscreen_canvas, font, 0, 20, textColor, trackName)
                 graphics.DrawText(offscreen_canvas, font, 0, 30, textColor, artistName)
