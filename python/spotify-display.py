@@ -10,7 +10,7 @@ from spotipy.oauth2 import SpotifyOAuth
 from spotipy.cache_handler import CacheFileHandler
 import simplejson
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageFont, ImageDraw
 import urllib
 import requests
 
@@ -44,7 +44,7 @@ def gamma(value):
     gamma = 2.8
     max_in = 255
     max_out = 255
-    return pow(value / max_in, gamma) * max_out
+    return int(pow(value / max_in, gamma) * max_out)
 
 def getImage(url):
     m = url.rsplit('/', 1)
@@ -60,7 +60,9 @@ def getImage(url):
 
     return image
 
-textColor = graphics.Color(gamma(192), gamma(192), gamma(192))
+# ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
+ttfFont = ImageFont.load("%s/font.pil" % (basepath))
+textColor = (gamma(192), gamma(192), gamma(192))
 
 def main():
     matrix = RGBMatrix(options=options)
@@ -125,8 +127,12 @@ def main():
             image = getImage(nowPlaying["item"]["album"]["images"][1]["url"])
 
             # Length of the longest line of text, in pixels.
-            length = max(graphics.DrawText(offscreen_canvas, font, 0, 20, textColor, trackName),
-                         graphics.DrawText(offscreen_canvas, font, 0, 30, textColor, artistName))
+            length = max(ttfFont.getsize(trackName)[0], ttfFont.getsize(artistName)[0])
+
+            canvas = Image.new('RGBA', (length, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(canvas)
+            draw.text((0, 10), trackName, textColor, font=ttfFont)
+            draw.text((0, 20), artistName, textColor,  font=ttfFont)
 
             if firstSongThisRun:
                 offscreen_canvas.Clear()
@@ -142,10 +148,11 @@ def main():
 
                 for x in range(length + options.cols):
                     offscreen_canvas.Clear()
+                    offscreen_canvas.SetImage(canvas.convert('RGB'))
                     offscreen_canvas.SetImage(image.convert('RGB'), 32, 0)
 
-                    graphics.DrawText(offscreen_canvas, font, (options.cols - x), 20, textColor, trackName)
-                    graphics.DrawText(offscreen_canvas, font, (options.cols - x), 30, textColor, artistName)
+                    # graphics.DrawText(offscreen_canvas, font, (options.cols - x), 20, textColor, trackName)
+                    # graphics.DrawText(offscreen_canvas, font, (options.cols - x), 30, textColor, artistName)
 
                     offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
                     time.sleep(timing)
