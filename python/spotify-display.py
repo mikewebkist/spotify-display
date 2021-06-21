@@ -15,6 +15,8 @@ import urllib
 import requests
 
 basepath = os.path.dirname(sys.argv[0])
+if basepath == "":
+    basepath = "."
 
 username = "mikewebkist"
 
@@ -36,7 +38,7 @@ font = graphics.Font()
 font.LoadFont("%s/font.bdf" % (basepath))
 textColor = graphics.Color(128, 128, 128)
 
-cache_handler = CacheFileHandler(cache_path="/etc/spotify-matrix/" + username)
+cache_handler = CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username))
 image_cache = "%s/imagecache" % (basepath)
 
 def getImage(url):
@@ -47,7 +49,10 @@ def getImage(url):
         urllib.request.urlretrieve(url, filename)
 
     image = Image.open(filename)
-    image.thumbnail((32, 32), Image.NEAREST)
+    image = ImageEnhance.Contrast(image).enhance(1.5)
+    image = ImageEnhance.Brightness(image).enhance(0.25)
+    image = image.resize((32, 32), resample=Image.LANCZOS)
+
     return image
 
 def main():
@@ -58,7 +63,7 @@ def main():
     sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=os.environ["SPOTIFY_ID"],
                                                    client_secret=os.environ["SPOTIFY_SECRET"],
                                                    cache_handler=cache_handler,
-                                                   redirect_uri="http://matrix.local:8080/callback",
+                                                   redirect_uri="http://localhost:8080/callback",
                                                    show_dialog=True,
                                                    open_browser=False,
                                                    scope="user-library-read,user-read-playback-state"))
@@ -107,9 +112,6 @@ def main():
 
             # Art looks slightly better with more contrast and a litte darker
             image = getImage(nowPlaying["item"]["album"]["images"][1]["url"])
-            image = ImageEnhance.Contrast(image).enhance(1.25)
-            image = ImageEnhance.Brightness(image).enhance(0.25)
-            image = image.resize((32, 32), resample=Image.HAMMING)
 
             # Length of the longest line of text, in pixels.
             length = max(graphics.DrawText(offscreen_canvas, font, 0, 20, textColor, trackName),
@@ -120,25 +122,27 @@ def main():
                 timing = 0.025
 
                 for x in range(length + options.cols):
-                    offscreen_canvas.Fill(0, 0, 0)
+                    offscreen_canvas.Clear()
                     offscreen_canvas.SetImage(image.convert('RGB'), 32, 0)
 
-                    graphics.DrawText(offscreen_canvas, font, options.cols - x, 20, textColor, trackName)
-                    graphics.DrawText(offscreen_canvas, font, options.cols - x, 30, textColor, artistName)
+                    graphics.DrawText(offscreen_canvas, font, (options.cols - x), 20, textColor, trackName)
+                    graphics.DrawText(offscreen_canvas, font, (options.cols - x), 30, textColor, artistName)
 
                     offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
                     time.sleep(timing)
+
                 time.sleep(1.5)
 
             # If all the text fits, don't scroll.
             else:
-                offscreen_canvas.Fill(0, 0, 0)
+                offscreen_canvas.Clear()
                 offscreen_canvas.SetImage(image.convert('RGB'), 32, 0)
 
                 graphics.DrawText(offscreen_canvas, font, 0, 20, textColor, trackName)
                 graphics.DrawText(offscreen_canvas, font, 0, 30, textColor, artistName)
 
                 offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
+
                 time.sleep(2.0)
 
             # time.sleep(ms_pause / 1000.0)
