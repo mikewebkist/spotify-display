@@ -59,11 +59,19 @@ def getImage(url):
     image = ImageEnhance.Contrast(image).enhance(1.5)
     image = ImageEnhance.Brightness(image).enhance(gamma(172) / 255.0)
     image = image.resize((32, 32), resample=Image.LANCZOS)
-
     return image
 
-# ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
-ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/piboto/Piboto-Regular.ttf", 10)
+def getTextImage(texts, color):
+    txtImg = Image.new('RGBA', (options.cols, options.rows), (255, 255, 255, 0))
+    draw = ImageDraw.Draw(txtImg)
+    for text, position in texts:
+        (x, y) = position
+        # Drop shadow
+        draw.text((x - 1, y + 1), text, (0,0,0), font=ttfFont)
+        draw.text((x,     y), text, color,   font=ttfFont)
+    return txtImg
+
+ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
 textColor = (gamma(192), gamma(192), gamma(192))
 
 def main():
@@ -119,7 +127,7 @@ def main():
         # We have a playing track.
         if nowPlaying and nowPlaying["is_playing"] and nowPlaying["item"]:
             trackName = nowPlaying["item"]["name"]
-            artistName = nowPlaying["item"]["artists"][0]["name"]
+            artistName = ", ".join(map(lambda x: x["name"], nowPlaying["item"]["artists"]))
             if lastAlbum != nowPlaying["item"]["album"]["id"]:
                 lastAlbum = nowPlaying["item"]["album"]["id"]
                 firstRunThisAlbum = True
@@ -149,39 +157,38 @@ def main():
 
             # If either line of text is longer than the display, scroll
             if length >= options.cols:
-                for x in range(length + options.cols):
-                    canvas = Image.new('RGB', (64, 32), (0, 0, 0))
+                for x in range(length + options.cols + 10):
+                    canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
                     canvas.paste(image, (32, 0))
-                    draw = ImageDraw.Draw(canvas)
-                    draw.text((options.cols - x, 10), trackName, textColor, font=ttfFont)
-                    draw.text((options.cols - x, 20), artistName, textColor,  font=ttfFont)
-                    offscreen_canvas.SetImage(canvas, 0, 0)
+                    txtImg = getTextImage([(trackName, (options.cols - x, 10)),
+                                           (artistName, (options.cols - x, 20))], textColor)
+
+                    offscreen_canvas.SetImage(Image.alpha_composite(canvas, txtImg).convert('RGB'), 0, 0)
                     offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
                     time.sleep(0.025)
 
-                time.sleep(1.5)
+                time.sleep(1.25)
 
             # If all the text fits, don't scroll.
             else:
                 if firstRunThisSong:
                     for x in range(127):
+                        textColorFade = (gamma(192), gamma(192), gamma(192), x * 2)
                         canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
                         canvas.paste(image, (32, 0))
 
-                        txt = Image.new('RGBA', canvas.size, (255, 255, 255, 0))
-                        draw = ImageDraw.Draw(txt)
-                        textColorFade = (gamma(192), gamma(192), gamma(192), x * 2)
-                        draw.text((0, 10), trackName, fill=textColorFade, font=ttfFont)
-                        draw.text((0, 20), artistName, fill=textColorFade, font=ttfFont)
-                        offscreen_canvas.SetImage(Image.alpha_composite(canvas, txt).convert('RGB'), 0, 0)
+                        txtImg = getTextImage([(trackName, (0, 10)), (artistName, (0, 20))], textColorFade)
+
+                        offscreen_canvas.SetImage(Image.alpha_composite(canvas, txtImg).convert('RGB'), 0, 0)
                         offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
 
-                canvas = Image.new('RGB', (64, 32), (0, 0, 0))
+                        # offscreen_canvas.SetImage(ImageChops.logical_xor(canvas, txt).convert('RGB'), 0, 0)
+                canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
                 canvas.paste(image, (32, 0))
-                draw = ImageDraw.Draw(canvas)
-                draw.text((0, 10), trackName, textColor, font=ttfFont)
-                draw.text((0, 20), artistName, textColor,  font=ttfFont)
-                offscreen_canvas.SetImage(canvas, 0, 0)
+
+                txtImg = getTextImage([(trackName, (0, 10)), (artistName, (0, 20))], textColor)
+
+                offscreen_canvas.SetImage(Image.alpha_composite(canvas, txtImg).convert('RGB'), 0, 0)
                 offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
 
                 time.sleep(2.0)
