@@ -36,7 +36,6 @@ options.disable_hardware_pulsing = False
 options.gpio_slowdown = 3
 
 ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
-textColor = (gamma(192), gamma(192), gamma(192))
 
 cache_handler = CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username))
 image_cache = "%s/imagecache" % (basepath)
@@ -51,7 +50,7 @@ def getImage(url):
     m = url.rsplit('/', 1)
     filename = "%s/%s" % (image_cache, m[-1])
     if not os.path.isfile(filename):
-        logger.debug("Getting %s" % url)
+        logger.info("Getting %s" % url)
         urllib.request.urlretrieve(url, filename)
 
     image = Image.open(filename)
@@ -71,6 +70,31 @@ def getTextImage(texts, color):
         draw.text((x,     y), text, color,   font=ttfFont)
     return txtImg
 
+def getWeatherImage():
+    r = urllib.request.urlopen("http://api.openweathermap.org/data/2.5/weather?id=4560349&appid=%s" % (os.environ["OPENWEATHER_API"]))
+    payload = simplejson.loads(r.read())
+    icon = payload["weather"][0]["icon"]
+    logger.info(payload["weather"][0]["main"])
+
+    url = "http://openweathermap.org/img/wn/%s@2x.png" % (icon)
+    filename = "%s/%s" % (image_cache, icon)
+    if not os.path.isfile(filename):
+        logger.info("Getting %s" % url)
+        urllib.request.urlretrieve(url, filename)
+
+    canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
+
+    iconImage = Image.open(filename)
+    iconImage = ImageEnhance.Brightness(iconImage).enhance(gamma(192) / 255.0)
+    iconImage = iconImage.resize((32, 32), resample=Image.BICUBIC)
+    canvas.paste(iconImage, (32, 0))
+
+    tempString = "%.0f ºF" % ((payload["main"]["temp"] - 273.15) * 1.8 + 32)
+    txtImg = getTextImage([(tempString, (2, 10))], textColor)
+    return Image.alpha_composite(canvas, txtImg).convert('RGB')
+
+textColor = (gamma(192), gamma(192), gamma(192))
+
 def main():
     matrix = RGBMatrix(options=options)
     offscreen_canvas = matrix.CreateFrameCanvas()
@@ -87,6 +111,8 @@ def main():
     user = sp.current_user()
     logger.info("Now Playing for %s [%s]" % (user["display_name"], user["id"]))
 
+    weatherImage = None
+    weatherCooldownUntil = time.time()
     cooldownUntil = time.time() * 1000.0
     nowPlaying = None
     lastSong = ""
@@ -196,7 +222,12 @@ def main():
                 logger.info("Nothing playing...")
                 lastSong = "nothing playing"
 
-            offscreen_canvas.Clear()
+            if weatherImage == None or weatherCooldownUntil < time.time():
+                logger.info("%d %d" % (weatherCooldownUntil, time.time()))
+                weatherImage = getWeatherImage()
+                weatherCooldownUntil = time.time() + 5 * 60.0
+                
+            offscreen_canvas.SetImage(weatherImage.convert('RGB'), 0, 0)
             offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
             time.sleep(1.0)
 
