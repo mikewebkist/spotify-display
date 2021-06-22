@@ -35,8 +35,8 @@ options.cols = 64
 options.disable_hardware_pulsing = False
 options.gpio_slowdown = 3
 
-font = graphics.Font()
-font.LoadFont("%s/font.bdf" % (basepath))
+ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
+textColor = (gamma(192), gamma(192), gamma(192))
 
 cache_handler = CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username))
 image_cache = "%s/imagecache" % (basepath)
@@ -70,9 +70,6 @@ def getTextImage(texts, color):
         draw.text((x - 1, y + 1), text, (0,0,0), font=ttfFont)
         draw.text((x,     y), text, color,   font=ttfFont)
     return txtImg
-
-ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
-textColor = (gamma(192), gamma(192), gamma(192))
 
 def main():
     matrix = RGBMatrix(options=options)
