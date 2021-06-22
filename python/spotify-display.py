@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import spotipy
+from random import random
 import logging
 import time
 import sys
@@ -10,7 +11,7 @@ from spotipy.oauth2 import SpotifyOAuth
 from spotipy.cache_handler import CacheFileHandler
 import simplejson
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
-from PIL import Image, ImageEnhance, ImageFont, ImageDraw
+from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops
 import urllib
 import requests
 
@@ -54,15 +55,15 @@ def getImage(url):
         urllib.request.urlretrieve(url, filename)
 
     image = Image.open(filename)
+    # Art looks slightly better with more contrast and a litte darker
     image = ImageEnhance.Contrast(image).enhance(1.5)
-    image = ImageEnhance.Brightness(image).enhance(gamma(150) / 255.0)
+    image = ImageEnhance.Brightness(image).enhance(gamma(172) / 255.0)
     image = image.resize((32, 32), resample=Image.LANCZOS)
 
     return image
 
-ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
-# ttfFont = ImageFont.load("%s/font.pil" % (basepath))
-
+# ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
+ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/piboto/Piboto-Regular.ttf", 10)
 textColor = (gamma(192), gamma(192), gamma(192))
 
 def main():
@@ -132,26 +133,22 @@ def main():
             else:
                 firstRunThisSong = False
 
-            # Art looks slightly better with more contrast and a litte darker
             image = getImage(nowPlaying["item"]["album"]["images"][1]["url"])
 
-            # Length of the longest line of text, in pixels.
-            length = max(ttfFont.getsize(trackName)[0], ttfFont.getsize(artistName)[0])
-            canvas = Image.new('RGB', (64, 32), (0, 0, 0))
-
             if firstRunThisAlbum:
-                for x in range(255):
-                    imageDim = ImageEnhance.Brightness(image).enhance(gamma(x) / 255.0)
+                canvas = Image.new('RGB', (64, 32), (0, 0, 0))
+                for x in range(127):
+                    imageDim = ImageEnhance.Brightness(image).enhance(gamma(x * 2) / 255.0)
                     canvas.paste(imageDim, (32, 0))
                     offscreen_canvas.SetImage(canvas, 0, 0)
                     offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
                 time.sleep(0.5)
 
+            # Length of the longest line of text, in pixels.
+            length = max(ttfFont.getsize(trackName)[0], ttfFont.getsize(artistName)[0])
 
             # If either line of text is longer than the display, scroll
-            if length > options.cols:
-                timing = 0.025
-
+            if length >= options.cols:
                 for x in range(length + options.cols):
                     canvas = Image.new('RGB', (64, 32), (0, 0, 0))
                     canvas.paste(image, (32, 0))
@@ -160,23 +157,34 @@ def main():
                     draw.text((options.cols - x, 20), artistName, textColor,  font=ttfFont)
                     offscreen_canvas.SetImage(canvas, 0, 0)
                     offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
-                    time.sleep(timing)
+                    time.sleep(0.025)
 
                 time.sleep(1.5)
 
             # If all the text fits, don't scroll.
             else:
+                if firstRunThisSong:
+                    for x in range(127):
+                        canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
+                        canvas.paste(image, (32, 0))
+
+                        txt = Image.new('RGBA', canvas.size, (255, 255, 255, 0))
+                        draw = ImageDraw.Draw(txt)
+                        textColorFade = (gamma(192), gamma(192), gamma(192), x * 2)
+                        draw.text((0, 10), trackName, fill=textColorFade, font=ttfFont)
+                        draw.text((0, 20), artistName, fill=textColorFade, font=ttfFont)
+                        offscreen_canvas.SetImage(Image.alpha_composite(canvas, txt).convert('RGB'), 0, 0)
+                        offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
+
                 canvas = Image.new('RGB', (64, 32), (0, 0, 0))
                 canvas.paste(image, (32, 0))
                 draw = ImageDraw.Draw(canvas)
-                draw.text((1, 10), trackName, textColor, font=ttfFont)
-                draw.text((1, 20), artistName, textColor,  font=ttfFont)
+                draw.text((0, 10), trackName, textColor, font=ttfFont)
+                draw.text((0, 20), artistName, textColor,  font=ttfFont)
                 offscreen_canvas.SetImage(canvas, 0, 0)
                 offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
 
                 time.sleep(2.0)
-
-            # time.sleep(ms_pause / 1000.0)
 
         # Nothing is playing
         else:
@@ -186,7 +194,6 @@ def main():
 
             offscreen_canvas.Clear()
             offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
-            time.sleep(2.0)
-
+            time.sleep(1.0)
 
 main()
