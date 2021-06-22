@@ -60,8 +60,9 @@ def getImage(url):
 
     return image
 
-# ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
-ttfFont = ImageFont.load("%s/font.pil" % (basepath))
+ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
+# ttfFont = ImageFont.load("%s/font.pil" % (basepath))
+
 textColor = (gamma(192), gamma(192), gamma(192))
 
 def main():
@@ -83,7 +84,9 @@ def main():
     cooldownUntil = time.time() * 1000.0
     nowPlaying = None
     lastSong = ""
+    lastAlbum = ""
     firstRunThisSong = True
+    firstRunThisAlbum = True
 
     while True:
 
@@ -98,9 +101,9 @@ def main():
                     # At the end of the song, try to time it close.
                     elif (nowPlaying["item"]["duration_ms"] - nowPlaying["progress_ms"]) < (30.0 * 1000.0):
                         cooldownUntil = (time.time() * 1000.0) + (nowPlaying["item"]["duration_ms"] - nowPlaying["progress_ms"])
-                    # Otherwise, try every 30 seconds while playing.
+                    # Otherwise, try every 10 seconds while playing.
                     else:
-                        cooldownUntil = (time.time() * 1000.0) + (30.0 * 1000.0)
+                        cooldownUntil = (time.time() * 1000.0) + (10.0 * 1000.0)
                 else:
                     cooldownUntil = (time.time() + 30) * 1000.0
 
@@ -116,44 +119,46 @@ def main():
         if nowPlaying and nowPlaying["is_playing"] and nowPlaying["item"]:
             trackName = nowPlaying["item"]["name"]
             artistName = nowPlaying["item"]["artists"][0]["name"]
+            if lastAlbum != nowPlaying["item"]["album"]["id"]:
+                lastAlbum = nowPlaying["item"]["album"]["id"]
+                firstRunThisAlbum = True
+            else:
+                firstRunThisAlbum = False
+
             if lastSong != nowPlaying["item"]["id"]:
                 logger.info(u'%s - %s' % (trackName, artistName))
                 lastSong = nowPlaying["item"]["id"]
-                firstSongThisRun = True
+                firstRunThisSong = True
             else:
-                firstSongThisRun = False
+                firstRunThisSong = False
 
             # Art looks slightly better with more contrast and a litte darker
             image = getImage(nowPlaying["item"]["album"]["images"][1]["url"])
 
             # Length of the longest line of text, in pixels.
             length = max(ttfFont.getsize(trackName)[0], ttfFont.getsize(artistName)[0])
+            canvas = Image.new('RGB', (64, 32), (0, 0, 0))
 
-            canvas = Image.new('RGBA', (length, 32), (0, 0, 0, 0))
-            draw = ImageDraw.Draw(canvas)
-            draw.text((0, 10), trackName, textColor, font=ttfFont)
-            draw.text((0, 20), artistName, textColor,  font=ttfFont)
-
-            if firstSongThisRun:
-                offscreen_canvas.Clear()
+            if firstRunThisAlbum:
                 for x in range(255):
                     imageDim = ImageEnhance.Brightness(image).enhance(gamma(x) / 255.0)
-                    offscreen_canvas.SetImage(imageDim.convert('RGB'), 32, 0)
+                    canvas.paste(imageDim, (32, 0))
+                    offscreen_canvas.SetImage(canvas, 0, 0)
                     offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
                 time.sleep(0.5)
+
 
             # If either line of text is longer than the display, scroll
             if length > options.cols:
                 timing = 0.025
 
                 for x in range(length + options.cols):
-                    offscreen_canvas.Clear()
-                    offscreen_canvas.SetImage(canvas.convert('RGB'))
-                    offscreen_canvas.SetImage(image.convert('RGB'), 32, 0)
-
-                    # graphics.DrawText(offscreen_canvas, font, (options.cols - x), 20, textColor, trackName)
-                    # graphics.DrawText(offscreen_canvas, font, (options.cols - x), 30, textColor, artistName)
-
+                    canvas = Image.new('RGB', (64, 32), (0, 0, 0))
+                    canvas.paste(image, (32, 0))
+                    draw = ImageDraw.Draw(canvas)
+                    draw.text((options.cols - x, 10), trackName, textColor, font=ttfFont)
+                    draw.text((options.cols - x, 20), artistName, textColor,  font=ttfFont)
+                    offscreen_canvas.SetImage(canvas, 0, 0)
                     offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
                     time.sleep(timing)
 
@@ -161,19 +166,12 @@ def main():
 
             # If all the text fits, don't scroll.
             else:
-                offscreen_canvas.Clear()
-                offscreen_canvas.SetImage(image.convert('RGB'), 32, 0)
-
-                if firstSongThisRun:
-                    for x in range(192):
-                        textColorFade = graphics.Color(gamma(x), gamma(x), gamma(x))
-                        graphics.DrawText(offscreen_canvas, font, 0, 20, textColorFade, trackName)
-                        graphics.DrawText(offscreen_canvas, font, 0, 30, textColorFade, artistName)
-                        offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
-
-                graphics.DrawText(offscreen_canvas, font, 0, 20, textColor, trackName)
-                graphics.DrawText(offscreen_canvas, font, 0, 30, textColor, artistName)
-
+                canvas = Image.new('RGB', (64, 32), (0, 0, 0))
+                canvas.paste(image, (32, 0))
+                draw = ImageDraw.Draw(canvas)
+                draw.text((1, 10), trackName, textColor, font=ttfFont)
+                draw.text((1, 20), artistName, textColor,  font=ttfFont)
+                offscreen_canvas.SetImage(canvas, 0, 0)
                 offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
 
                 time.sleep(2.0)
