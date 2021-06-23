@@ -36,6 +36,7 @@ options.disable_hardware_pulsing = False
 options.gpio_slowdown = 3
 
 ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
+# ttfFont = ImageFont.truetype("/home/pi/Downloads/Geneva Regular.ttf", 10)
 
 cache_handler = CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username))
 image_cache = "%s/imagecache" % (basepath)
@@ -63,12 +64,15 @@ def getImage(url):
 def getTextImage(texts, color):
     txtImg = Image.new('RGBA', (options.cols, options.rows), (255, 255, 255, 0))
     draw = ImageDraw.Draw(txtImg)
+    draw.fontmode = "1"
     for text, position in texts:
         (x, y) = position
         # Drop shadow
         draw.text((x - 1, y + 1), text, (0,0,0), font=ttfFont)
         draw.text((x,     y), text, color,   font=ttfFont)
     return txtImg
+
+textColor = (gamma(192), gamma(192), gamma(192))
 
 def getWeatherImage():
     r = urllib.request.urlopen("http://api.openweathermap.org/data/2.5/weather?id=4560349&appid=%s" % (os.environ["OPENWEATHER_API"]))
@@ -85,15 +89,13 @@ def getWeatherImage():
     canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
 
     iconImage = Image.open(filename)
+    iconImage = iconImage.resize((50, 50), resample=Image.BICUBIC)
     iconImage = ImageEnhance.Brightness(iconImage).enhance(gamma(192) / 255.0)
-    iconImage = iconImage.resize((32, 32), resample=Image.BICUBIC)
-    canvas.paste(iconImage, (32, 0))
+    canvas.paste(iconImage, (23, -9))
 
-    tempString = "%.0f ºF" % ((payload["main"]["temp"] - 273.15) * 1.8 + 32)
-    txtImg = getTextImage([(tempString, (2, 10))], textColor)
+    tempString = "%.0f F" % ((payload["main"]["temp"] - 273.15) * 1.8 + 32)
+    txtImg = getTextImage([(tempString, (5, 10))], textColor)
     return Image.alpha_composite(canvas, txtImg).convert('RGB')
-
-textColor = (gamma(192), gamma(192), gamma(192))
 
 def main():
     matrix = RGBMatrix(options=options)
