@@ -91,7 +91,7 @@ def getWeatherImage():
     iconImage = Image.open(filename)
     iconImage = iconImage.resize((50, 50), resample=Image.BICUBIC)
     iconImage = ImageEnhance.Brightness(iconImage).enhance(gamma(192) / 255.0)
-    canvas.paste(iconImage, (23, -9))
+    canvas.paste(iconImage, (19, -9))
 
     tempString = "%.0f F" % ((payload["main"]["temp"] - 273.15) * 1.8 + 32)
     txtImg = getTextImage([(tempString, (5, 10))], textColor)
