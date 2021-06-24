@@ -15,17 +15,17 @@ from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops
 import urllib
 import requests
 
+ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
+username = "mikewebkist"
+
 basepath = os.path.dirname(sys.argv[0])
 if basepath == "":
     basepath = "."
-
-username = "mikewebkist"
 
 if len(sys.argv) > 1:
     username = sys.argv[1]
 
 logging.basicConfig(filename='/tmp/spotify-matrix.log',level=logging.INFO)
-
 logger = logging.getLogger(__name__)
 
 options = RGBMatrixOptions()
@@ -35,13 +35,10 @@ options.cols = 64
 options.disable_hardware_pulsing = False
 options.gpio_slowdown = 3
 
-ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
-
-cache_handler = CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username))
 image_cache = "%s/imagecache" % (basepath)
 
 def gamma(value):
-    gamma = 2.8
+    gamma = 1.8
     max_in = 255
     max_out = 255
     return int(pow(value / max_in, gamma) * max_out)
@@ -55,9 +52,9 @@ def getImage(url):
 
     image = Image.open(filename)
     # Art looks slightly better with more contrast and a litte darker
-    image = ImageEnhance.Contrast(image).enhance(1.5)
-    image = ImageEnhance.Brightness(image).enhance(gamma(172) / 255.0)
     image = image.resize((32, 32), resample=Image.LANCZOS)
+    image = Image.eval(image, gamma)
+    image = ImageEnhance.Brightness(image).enhance(0.5)
     return image
 
 def getTextImage(texts, color):
@@ -76,10 +73,10 @@ def getTextImage(texts, color):
 textColor = (gamma(192), gamma(192), gamma(192))
 
 def getWeatherImage():
-    r = urllib.request.urlopen("http://api.openweathermap.org/data/2.5/weather?id=4560349&appid=%s" % (os.environ["OPENWEATHER_API"]))
+    r = urllib.request.urlopen("https://api.openweathermap.org/data/2.5/onecall?lat=39.9623348&lon=-75.1927043&appid=%s" % (os.environ["OPENWEATHER_API"]))
     payload = simplejson.loads(r.read())
-    icon = payload["weather"][0]["icon"]
-    logger.info(payload["weather"][0]["main"])
+    icon = payload["current"]["weather"][0]["icon"]
+    logger.info(payload["current"]["weather"][0]["main"])
 
     url = "http://openweathermap.org/img/wn/%s.png" % (icon)
     filename = "%s/%s" % (image_cache, icon)
@@ -90,19 +87,20 @@ def getWeatherImage():
     canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
 
     iconImage = Image.open(filename)
-    iconImage = ImageEnhance.Brightness(iconImage).enhance(gamma(192) / 255.0)
+    iconImage = Image.eval(iconImage, gamma)
+    iconImage = ImageEnhance.Brightness(iconImage).enhance(0.5)
     canvas.paste(iconImage, (20, -9), mask=iconImage)
 
-    tempString = "%.0f F" % ((payload["main"]["temp"] - 273.15) * 1.8 + 32)
-    humidityString = "%.0f%%" % ((payload["main"]["humidity"]))
+    tempString = "%.0f F" % ((payload["current"]["temp"] - 273.15) * 1.8 + 32)
+    humidityString = "%.0f%%" % ((payload["current"]["humidity"]))
     txtImg = getTextImage([(tempString, (5, 5)),
                            (humidityString, (5, 15))], textColor)
     return Image.alpha_composite(canvas, txtImg).convert('RGB')
 
 def main():
     matrix = RGBMatrix(options=options)
+    cache_handler = CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username))
     offscreen_canvas = matrix.CreateFrameCanvas()
-
 
     sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=os.environ["SPOTIFY_ID"],
                                                    client_secret=os.environ["SPOTIFY_SECRET"],
@@ -176,7 +174,7 @@ def main():
             if firstRunThisAlbum:
                 canvas = Image.new('RGB', (64, 32), (0, 0, 0))
                 for x in range(127):
-                    imageDim = ImageEnhance.Brightness(image).enhance(gamma(x * 2) / 255.0)
+                    imageDim = ImageEnhance.Brightness(image).enhance(x * 2 / 255.0)
                     canvas.paste(imageDim, (32, 0))
                     offscreen_canvas.SetImage(canvas, 0, 0)
                     offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
@@ -203,7 +201,8 @@ def main():
             else:
                 if firstRunThisSong:
                     for x in range(127):
-                        textColorFade = (gamma(192), gamma(192), gamma(192), x * 2)
+                        # Add an alpha channel to the color for fading in
+                        textColorFade = textColor + (x * 2,)
                         canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
                         canvas.paste(image, (32, 0))
 
@@ -232,7 +231,11 @@ def main():
             if weatherImage == None or weatherCooldownUntil < time.time():
                 logger.info("%d %d" % (weatherCooldownUntil, time.time()))
                 weatherImage = getWeatherImage()
-                weatherCooldownUntil = time.time() + 1 * 60.0
+                # Update every 30 minutes in the middle of the night, otherwise every five mins.
+                if time.localtime()[3] <= 5:
+                    weatherCooldownUntil = time.time() + 30 * 60.0
+                else:
+                    weatherCooldownUntil = time.time() + 5 * 60.0
                 
             offscreen_canvas.SetImage(weatherImage.convert('RGB'), 0, 0)
             offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
