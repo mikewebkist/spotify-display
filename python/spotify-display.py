@@ -91,7 +91,7 @@ def getWeatherImage():
 
     iconImage = Image.open(filename)
     iconImage = ImageEnhance.Brightness(iconImage).enhance(gamma(192) / 255.0)
-    canvas.paste(iconImage, (19, -9), mask=iconImage)
+    canvas.paste(iconImage, (20, -9), mask=iconImage)
 
     tempString = "%.0f F" % ((payload["main"]["temp"] - 273.15) * 1.8 + 32)
     humidityString = "%.0f%%" % ((payload["main"]["humidity"]))
