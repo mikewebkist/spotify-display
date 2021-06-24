@@ -36,7 +36,6 @@ options.disable_hardware_pulsing = False
 options.gpio_slowdown = 3
 
 ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
-# ttfFont = ImageFont.truetype("/home/pi/Downloads/Geneva Regular.ttf", 10)
 
 cache_handler = CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username))
 image_cache = "%s/imagecache" % (basepath)
@@ -64,11 +63,13 @@ def getImage(url):
 def getTextImage(texts, color):
     txtImg = Image.new('RGBA', (options.cols, options.rows), (255, 255, 255, 0))
     draw = ImageDraw.Draw(txtImg)
-    draw.fontmode = "1"
     for text, position in texts:
         (x, y) = position
-        # Drop shadow
+        # Fuzzy drop shadow
+        draw.fontmode = "L"
         draw.text((x - 1, y + 1), text, (0,0,0), font=ttfFont)
+        # Crisp text
+        draw.fontmode = "1"
         draw.text((x,     y), text, color,   font=ttfFont)
     return txtImg
 
@@ -80,7 +81,7 @@ def getWeatherImage():
     icon = payload["weather"][0]["icon"]
     logger.info(payload["weather"][0]["main"])
 
-    url = "http://openweathermap.org/img/wn/%s@2x.png" % (icon)
+    url = "http://openweathermap.org/img/wn/%s.png" % (icon)
     filename = "%s/%s" % (image_cache, icon)
     if not os.path.isfile(filename):
         logger.info("Getting %s" % url)
@@ -89,12 +90,13 @@ def getWeatherImage():
     canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
 
     iconImage = Image.open(filename)
-    iconImage = iconImage.resize((50, 50), resample=Image.BICUBIC)
     iconImage = ImageEnhance.Brightness(iconImage).enhance(gamma(192) / 255.0)
-    canvas.paste(iconImage, (19, -9))
+    canvas.paste(iconImage, (19, -9), mask=iconImage)
 
     tempString = "%.0f F" % ((payload["main"]["temp"] - 273.15) * 1.8 + 32)
-    txtImg = getTextImage([(tempString, (5, 10))], textColor)
+    humidityString = "%.0f%%" % ((payload["main"]["humidity"]))
+    txtImg = getTextImage([(tempString, (5, 5)),
+                           (humidityString, (5, 15))], textColor)
     return Image.alpha_composite(canvas, txtImg).convert('RGB')
 
 def main():
@@ -166,7 +168,10 @@ def main():
             else:
                 firstRunThisSong = False
 
-            image = getImage(nowPlaying["item"]["album"]["images"][1]["url"])
+            try:
+                image = getImage(nowPlaying["item"]["artists"][0]["images"][-1]["url"])
+            except KeyError:
+                image = getImage(nowPlaying["item"]["album"]["images"][1]["url"])
 
             if firstRunThisAlbum:
                 canvas = Image.new('RGB', (64, 32), (0, 0, 0))
@@ -227,7 +232,7 @@ def main():
             if weatherImage == None or weatherCooldownUntil < time.time():
                 logger.info("%d %d" % (weatherCooldownUntil, time.time()))
                 weatherImage = getWeatherImage()
-                weatherCooldownUntil = time.time() + 5 * 60.0
+                weatherCooldownUntil = time.time() + 1 * 60.0
                 
             offscreen_canvas.SetImage(weatherImage.convert('RGB'), 0, 0)
             offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
