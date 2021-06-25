@@ -22,6 +22,8 @@ basepath = os.path.dirname(sys.argv[0])
 if basepath == "":
     basepath = "."
 
+image_cache = "%s/imagecache" % (basepath)
+
 if len(sys.argv) > 1:
     username = sys.argv[1]
 
@@ -29,32 +31,43 @@ logging.basicConfig(filename='/tmp/spotify-matrix.log',level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 options = RGBMatrixOptions()
+options.brightness = 75
 options.hardware_mapping = "adafruit-hat-pwm"
 options.rows = 32
 options.cols = 64
 options.disable_hardware_pulsing = False
 options.gpio_slowdown = 3
 
-image_cache = "%s/imagecache" % (basepath)
+def gamma_builder(gamma_in):
+    def gamma(value):
+        return int(pow(value / 255, gamma_in) * 255)
+    return gamma
 
-def gamma(value):
-    gamma = 1.8
-    max_in = 255
-    max_out = 255
-    return int(pow(value / max_in, gamma) * max_out)
+gamma = gamma_builder(1.8)
 
-def getImage(url):
+def rawImage(url):
+    # We're going to save the processed image instead of the raw one.
     m = url.rsplit('/', 1)
-    filename = "%s/%s" % (image_cache, m[-1])
-    if not os.path.isfile(filename):
+    image = None
+    processed = "%s/%s.png" % (image_cache, m[-1])
+    if os.path.isfile(processed):
+        image = Image.open(processed)
+    else:
         logger.info("Getting %s" % url)
-        urllib.request.urlretrieve(url, filename)
+        with urllib.request.urlopen(url) as rawimage:
+            image = Image.open(rawimage)
+            image = image.resize((32, 32), resample=Image.LANCZOS)
+            image.save(processed, "PNG")
 
-    image = Image.open(filename)
+    return image
+
+def processedImage(url):
+    image = rawImage(url)
     # Art looks slightly better with more contrast and a litte darker
-    image = image.resize((32, 32), resample=Image.LANCZOS)
     image = Image.eval(image, gamma)
-    image = ImageEnhance.Brightness(image).enhance(0.5)
+    # image = ImageEnhance.Color(image).enhance(0.75)
+    image = ImageEnhance.Contrast(image).enhance(0.85)
+    # image = ImageEnhance.Brightness(image).enhance(0.75)
     return image
 
 def getTextImage(texts, color):
@@ -62,15 +75,13 @@ def getTextImage(texts, color):
     draw = ImageDraw.Draw(txtImg)
     for text, position in texts:
         (x, y) = position
-        # Fuzzy drop shadow
-        draw.fontmode = "L"
-        draw.text((x - 1, y + 1), text, (0,0,0), font=ttfFont)
-        # Crisp text
         draw.fontmode = "1"
+        draw.text((x - 1, y + 1), text, (0,0,0), font=ttfFont)
         draw.text((x,     y), text, color,   font=ttfFont)
     return txtImg
 
-textColor = (gamma(192), gamma(192), gamma(192))
+# textColor = (gamma(192), gamma(192), gamma(192))
+textColor = (255, 255, 255)
 
 def getWeatherImage():
     r = urllib.request.urlopen("https://api.openweathermap.org/data/2.5/onecall?lat=39.9623348&lon=-75.1927043&appid=%s" % (os.environ["OPENWEATHER_API"]))
@@ -87,8 +98,7 @@ def getWeatherImage():
     canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
 
     iconImage = Image.open(filename)
-    iconImage = Image.eval(iconImage, gamma)
-    iconImage = ImageEnhance.Brightness(iconImage).enhance(0.5)
+    iconImage = ImageEnhance.Brightness(iconImage).enhance(0.75)
     canvas.paste(iconImage, (20, -9), mask=iconImage)
 
     tempString = "%.0f F" % ((payload["current"]["temp"] - 273.15) * 1.8 + 32)
@@ -167,9 +177,9 @@ def main():
                 firstRunThisSong = False
 
             try:
-                image = getImage(nowPlaying["item"]["artists"][0]["images"][-1]["url"])
-            except KeyError:
-                image = getImage(nowPlaying["item"]["album"]["images"][1]["url"])
+                image = processedImage(nowPlaying["item"]["album"]["images"][-1]["url"])
+            except:
+                image = processedImage(sp.artist(nowPlaying["item"]["artists"][0]["id"])["images"][0]["url"])
 
             if firstRunThisAlbum:
                 canvas = Image.new('RGB', (64, 32), (0, 0, 0))
@@ -188,8 +198,10 @@ def main():
                 for x in range(length + options.cols + 10):
                     canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
                     canvas.paste(image, (32, 0))
-                    txtImg = getTextImage([(trackName, (options.cols - x, 10)),
-                                           (artistName, (options.cols - x, 20))], textColor)
+                    txtImg = getTextImage([
+                            (trackName, (options.cols - x, 10)),
+                            (artistName, (options.cols - x, 20))
+                        ], textColor)
 
                     offscreen_canvas.SetImage(Image.alpha_composite(canvas, txtImg).convert('RGB'), 0, 0)
                     offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
