@@ -65,9 +65,9 @@ def processedImage(url):
     image = rawImage(url)
     # Art looks slightly better with more contrast and a litte darker
     image = Image.eval(image, gamma)
-    # image = ImageEnhance.Color(image).enhance(0.75)
-    image = ImageEnhance.Contrast(image).enhance(0.85)
-    # image = ImageEnhance.Brightness(image).enhance(0.75)
+    image = ImageEnhance.Color(image).enhance(0.5)
+    # image = ImageEnhance.Contrast(image).enhance(0.95)
+    image = ImageEnhance.Brightness(image).enhance(0.85)
     return image
 
 def getTextImage(texts, color):
