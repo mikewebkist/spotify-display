@@ -16,6 +16,7 @@ import urllib
 import requests
 
 ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
+ttfFontSm = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 7)
 username = "mikewebkist"
 
 basepath = os.path.dirname(sys.argv[0])
@@ -65,23 +66,29 @@ def processedImage(url):
     image = rawImage(url)
     # Art looks slightly better with more contrast and a litte darker
     image = Image.eval(image, gamma)
-    # image = ImageEnhance.Color(image).enhance(0.75)
-    image = ImageEnhance.Contrast(image).enhance(0.85)
-    # image = ImageEnhance.Brightness(image).enhance(0.75)
+    image = ImageEnhance.Color(image).enhance(0.5)
+    # image = ImageEnhance.Contrast(image).enhance(0.95)
+    image = ImageEnhance.Brightness(image).enhance(0.85)
     return image
 
 def getTextImage(texts, color):
     txtImg = Image.new('RGBA', (options.cols, options.rows), (255, 255, 255, 0))
     draw = ImageDraw.Draw(txtImg)
-    for text, position in texts:
+    for text, position, *font in texts:
+        if font:
+            lineFont = font[0]
+            lineColor = font[1]
+        else:
+            lineFont = ttfFont
+            lineColor = color
         (x, y) = position
         draw.fontmode = "1"
-        draw.text((x - 1, y + 1), text, (0,0,0), font=ttfFont)
-        draw.text((x,     y), text, color,   font=ttfFont)
+        draw.text((x - 1, y + 1), text, (0,0,0), font=lineFont)
+        draw.text((x,     y    ), text, lineColor,   font=lineFont)
     return txtImg
 
-# textColor = (gamma(192), gamma(192), gamma(192))
-textColor = (255, 255, 255)
+textColor = (gamma(192), gamma(192), gamma(192))
+# textColor = (255, 255, 255)
 
 def getWeatherImage():
     r = urllib.request.urlopen("https://api.openweathermap.org/data/2.5/onecall?lat=39.9623348&lon=-75.1927043&appid=%s" % (os.environ["OPENWEATHER_API"]))
@@ -90,7 +97,7 @@ def getWeatherImage():
     logger.info(payload["current"]["weather"][0]["main"])
 
     url = "http://openweathermap.org/img/wn/%s.png" % (icon)
-    filename = "%s/%s" % (image_cache, icon)
+    filename = "%s/%s.png" % (image_cache, icon)
     if not os.path.isfile(filename):
         logger.info("Getting %s" % url)
         urllib.request.urlretrieve(url, filename)
@@ -103,8 +110,11 @@ def getWeatherImage():
 
     tempString = "%.0f F" % ((payload["current"]["temp"] - 273.15) * 1.8 + 32)
     humidityString = "%.0f%%" % ((payload["current"]["humidity"]))
-    txtImg = getTextImage([(tempString, (5, 5)),
-                           (humidityString, (5, 15))], textColor)
+    pressureString = "%.1f\"" % ((payload["current"]["pressure"] * 0.0295301))
+    txtImg = getTextImage([(tempString, (1, 1), ttfFont, (224, 224, 192)),
+                           (humidityString, (1, 12), ttfFont, (192, 224, 192)),
+                           (pressureString, (1, 24), ttfFontSm, (192, 192, 192))],
+                           textColor)
     return Image.alpha_composite(canvas, txtImg).convert('RGB')
 
 def main():
