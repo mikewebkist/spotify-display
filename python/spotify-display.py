@@ -92,9 +92,9 @@ textColor = (gamma(192), gamma(192), gamma(192))
 
 def getWeatherImage():
     r = urllib.request.urlopen("https://api.openweathermap.org/data/2.5/onecall?lat=39.9623348&lon=-75.1927043&appid=%s" % (os.environ["OPENWEATHER_API"]))
-    payload = simplejson.loads(r.read())
-    icon = payload["current"]["weather"][0]["icon"]
-    logger.info(payload["current"]["weather"][0]["main"])
+    now = simplejson.loads(r.read())["current"]
+    icon = now["weather"][0]["icon"]
+    logger.info(now["weather"][0]["main"])
 
     url = "http://openweathermap.org/img/wn/%s.png" % (icon)
     filename = "%s/%s.png" % (image_cache, icon)
@@ -103,18 +103,46 @@ def getWeatherImage():
         urllib.request.urlretrieve(url, filename)
 
     canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
+    draw = ImageDraw.Draw(canvas)
+
+    # Before sunrise
+    if now["dt"] < now["sunrise"]:
+        if (now["sunrise"] - now["dt"]) < 18:
+            dim = int(18 - (now["sunrise"] - now["dt"]) / 18.0 * 255.0)
+            skyColor = (192, 128, 192) # Dawn is purple
+        else:
+            dim = 255
+            skyColor = (0, 0, 0)
+    # After sunset
+    elif now["dt"] > now["sunset"]:
+        if (now["dt"] - now["sunset"]) < 18:
+            dim = int(18 - (now["dt"] - now["sunset"]) / 18.0 * 255.0)
+            skyColor = (255, 192, 128) # Sunset is orange
+        else:
+            dim = 255
+            skyColor = (0, 0, 0)
+    # Day
+    else:
+        dim = 255
+        skyColor = (128, 128, 255)
+
+    draw.rectangle([(30,0),  (64, 32)], fill=(skyColor + (int((18.0 - dim) / 18.0 * 255.0),)))
 
     iconImage = Image.open(filename)
-    iconImage = ImageEnhance.Brightness(iconImage).enhance(0.75)
-    canvas.paste(iconImage, (20, -9), mask=iconImage)
+    iconImage = iconImage.resize((40, 40), resample=Image.LANCZOS)
+    canvas.paste(iconImage, (28, -3), mask=iconImage)
 
-    tempString = "%.0f F" % ((payload["current"]["temp"] - 273.15) * 1.8 + 32)
-    humidityString = "%.0f%%" % ((payload["current"]["humidity"]))
-    pressureString = "%.1f\"" % ((payload["current"]["pressure"] * 0.0295301))
-    txtImg = getTextImage([(tempString, (1, 1), ttfFont, (224, 224, 192)),
-                           (humidityString, (1, 12), ttfFont, (192, 224, 192)),
-                           (pressureString, (1, 24), ttfFontSm, (192, 192, 192))],
+    tempString = "%.0f F" % ((now["temp"] - 273.15) * 1.8 + 32)
+    humidityString = "%.0f%%" % ((now["humidity"]))
+    windString = "%.0f mph" % ((now["wind_speed"] * 2.237))
+    pressureString = "%.1f\"" % ((now["pressure"] * 0.0295301))
+
+    txtImg = getTextImage([(tempString, (1, -1), ttfFont, (224, 224, 192)),
+                           (humidityString, (1, 8), ttfFont, (192, 224, 192)),
+                           (windString, (1, 18), ttfFontSm, (192, 224, 192)),
+                           (pressureString, (1, 25), ttfFontSm, (192, 192, 192))],
                            textColor)
+
     return Image.alpha_composite(canvas, txtImg).convert('RGB')
 
 def main():
