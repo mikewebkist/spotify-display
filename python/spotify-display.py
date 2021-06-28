@@ -90,9 +90,13 @@ def getTextImage(texts, color):
 textColor = (gamma(192), gamma(192), gamma(192))
 # textColor = (255, 255, 255)
 
+def ktof(k):
+    return (k - 273.15) * 1.8 + 32.0
+
 def getWeatherImage():
     r = urllib.request.urlopen("https://api.openweathermap.org/data/2.5/onecall?lat=39.9623348&lon=-75.1927043&appid=%s" % (os.environ["OPENWEATHER_API"]))
-    now = simplejson.loads(r.read())["current"]
+    payload = simplejson.loads(r.read())
+    now = payload["current"]
     icon = now["weather"][0]["icon"]
     logger.info(now["weather"][0]["main"])
 
@@ -128,19 +132,40 @@ def getWeatherImage():
 
     draw.rectangle([(30,0),  (64, 32)], fill=(skyColor + (int((18.0 - dim) / 18.0 * 255.0),)))
 
+    for x in range(24):
+        hour = payload["hourly"][x+1]
+        t = time.localtime(hour["dt"])
+        if t[3] == 0:
+            draw.line([(25, x+4), (27, x+4)], fill=(64, 64, 64))
+        if t[3] in [6, 18]:
+            draw.line([(26, x+4), (28, x+4)], fill=(64, 64, 64))
+        if t[3] == 12:
+            draw.line([(27, x+4), (29, x+4)], fill=(64, 64, 64))
+
+        diff = round(hour["temp"] - payload["hourly"][x]["temp"])
+        if diff == 0:
+            draw.point((27, x+4), fill=(32, 32, 32))
+        elif diff > 0:
+            # draw.point((diff + 27, x), fill=(128, 64, 64))
+            draw.point((27, x+4), fill=(128, 64, 32))
+        else:
+            # draw.point((diff + 27, x), fill=(64, 64, 128))
+            draw.point((27, x+4), fill=(32, 32, 128))
+
+
     iconImage = Image.open(filename)
     iconImage = iconImage.resize((40, 40), resample=Image.LANCZOS)
     canvas.paste(iconImage, (28, -3), mask=iconImage)
 
-    tempString = "%.0f F" % ((now["temp"] - 273.15) * 1.8 + 32)
+    tempString = "%.0f°" % (ktof(now["temp"]))
     humidityString = "%.0f%%" % ((now["humidity"]))
     windString = "%.0f mph" % ((now["wind_speed"] * 2.237))
     pressureString = "%.1f\"" % ((now["pressure"] * 0.0295301))
 
-    txtImg = getTextImage([(tempString, (1, -1), ttfFont, (224, 224, 192)),
-                           (humidityString, (1, 8), ttfFont, (192, 224, 192)),
-                           (windString, (1, 18), ttfFontSm, (192, 224, 192)),
-                           (pressureString, (1, 25), ttfFontSm, (192, 192, 192))],
+    txtImg = getTextImage([(tempString, (1, -2), ttfFont, (224, 224, 192)),
+                           (humidityString, (1, 7), ttfFont, (192, 224, 192)),
+                           (windString, (1, 17), ttfFontSm, (192, 224, 192)),
+                           (pressureString, (1, 24), ttfFontSm, (192, 192, 192))],
                            textColor)
 
     return Image.alpha_composite(canvas, txtImg).convert('RGB')
