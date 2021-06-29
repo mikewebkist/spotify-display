@@ -31,13 +31,6 @@ if len(sys.argv) > 1:
 logging.basicConfig(filename='/tmp/spotify-matrix.log',level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-options = RGBMatrixOptions()
-options.brightness = 75
-options.hardware_mapping = "adafruit-hat-pwm"
-options.rows = 32
-options.cols = 64
-options.disable_hardware_pulsing = False
-options.gpio_slowdown = 3
 
 def gamma_builder(gamma_in):
     def gamma(value):
@@ -177,7 +170,15 @@ def getWeatherImage():
 
 class Frame:
     def __init__(self):
-        self.matrix = RGBMatrix(options=options)
+        self.options = RGBMatrixOptions()
+        self.options.brightness = 75
+        self.options.hardware_mapping = "adafruit-hat-pwm"
+        self.options.rows = 32
+        self.options.cols = 64
+        self.options.disable_hardware_pulsing = False
+        self.options.gpio_slowdown = 3
+
+        self.matrix = RGBMatrix(options=self.options)
         self.offscreen_canvas = self.matrix.CreateFrameCanvas()
     
     def swap(self, canvas):
