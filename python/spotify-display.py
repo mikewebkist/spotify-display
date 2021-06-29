@@ -31,7 +31,6 @@ if len(sys.argv) > 1:
 logging.basicConfig(filename='/tmp/spotify-matrix.log',level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 def gamma_builder(gamma_in):
     def gamma(value):
         return int(pow(value / 255, gamma_in) * 255)
@@ -65,7 +64,7 @@ def processedImage(url):
     return image
 
 def getTextImage(texts, color):
-    txtImg = Image.new('RGBA', (options.cols, options.rows), (255, 255, 255, 0))
+    txtImg = Image.new('RGBA', (64, 32), (255, 255, 255, 0))
     draw = ImageDraw.Draw(txtImg)
     for text, position, *font in texts:
         if font:
@@ -180,6 +179,8 @@ class Frame:
 
         self.matrix = RGBMatrix(options=self.options)
         self.offscreen_canvas = self.matrix.CreateFrameCanvas()
+        self.width = self.options.cols
+        self.height = self.options.rows
     
     def swap(self, canvas):
         self.offscreen_canvas.SetImage(canvas, 0, 0)
@@ -269,13 +270,13 @@ def main():
             length = max(ttfFont.getsize(trackName)[0], ttfFont.getsize(artistName)[0])
 
             # If either line of text is longer than the display, scroll
-            if length >= options.cols:
-                for x in range(length + options.cols + 10):
+            if length >= frame.width:
+                for x in range(length + frame.width + 10):
                     canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
                     canvas.paste(image, (32, 0))
                     txtImg = getTextImage([
-                            (trackName, (options.cols - x, 10)),
-                            (artistName, (options.cols - x, 20))
+                            (trackName, (frame.width - x, 10)),
+                            (artistName, (frame.width - x, 20))
                         ], textColor)
 
 
