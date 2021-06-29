@@ -142,15 +142,13 @@ def getWeatherImage():
         if t[3] == 12:
             draw.line([(27, x+4), (29, x+4)], fill=(64, 64, 64))
 
-        diff = round(hour["temp"] - payload["hourly"][x]["temp"])
-        if diff == 0:
-            draw.point((27, x+4), fill=(32, 32, 32))
-        elif diff > 0:
-            # draw.point((diff + 27, x), fill=(128, 64, 64))
+        diff = hour["temp"] - payload["hourly"][x]["temp"]
+        if diff > 1.0:
             draw.point((27, x+4), fill=(128, 64, 32))
-        else:
-            # draw.point((diff + 27, x), fill=(64, 64, 128))
+        elif diff < -1.0:
             draw.point((27, x+4), fill=(32, 32, 128))
+        else:
+            draw.point((27, x+4), fill=(32, 32, 32))
 
     phase = ((round(payload["daily"][0]["moon_phase"] * 8) + 11))
 
