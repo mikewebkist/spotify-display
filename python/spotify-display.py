@@ -130,29 +130,29 @@ def getWeatherImage():
         dim = 255
         skyColor = (128, 128, 255)
 
-    draw.rectangle([(30,0),  (64, 32)], fill=(skyColor + (dim ,)))
+    draw.rectangle([(32,0),  (64, 32)], fill=(skyColor + (dim ,)))
 
     for x in range(24):
         hour = payload["hourly"][x+1]
         t = time.localtime(hour["dt"])
         if t[3] == 0:
-            draw.line([(25, x+4), (27, x+4)], fill=(64, 64, 64))
-        if t[3] in [6, 18]:
             draw.line([(26, x+4), (28, x+4)], fill=(64, 64, 64))
-        if t[3] == 12:
+        if t[3] in [6, 18]:
             draw.line([(27, x+4), (29, x+4)], fill=(64, 64, 64))
+        if t[3] == 12:
+            draw.line([(28, x+4), (30, x+4)], fill=(64, 64, 64))
 
         diff = hour["temp"] - payload["hourly"][x]["temp"]
         if diff > 1.0:
-            draw.point((27, x+4), fill=(128, 64, 32))
+            draw.point((28, x+4), fill=(128, 64, 32))
         elif diff < -1.0:
-            draw.point((27, x+4), fill=(32, 32, 128))
+            draw.point((28, x+4), fill=(32, 32, 128))
         else:
-            draw.point((27, x+4), fill=(32, 32, 32))
+            draw.point((28, x+4), fill=(32, 32, 32))
 
     phase = ((round(payload["daily"][0]["moon_phase"] * 8) + 11))
 
-    if now["dt"] > now["sunset"] or now["sunrise"] > now["dt"]:
+    if now["dt"] > (now["sunset"] + 1080) or (now["sunrise"] - 1080 ) > now["dt"]:
         iconImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase))
         iconImage = iconImage.resize((30, 30), resample=Image.LANCZOS)
         iconImage = ImageEnhance.Brightness(iconImage).enhance(0.5)
