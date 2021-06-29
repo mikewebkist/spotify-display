@@ -111,16 +111,16 @@ def getWeatherImage():
 
     # Before sunrise
     if now["dt"] < now["sunrise"]:
-        if (now["sunrise"] - now["dt"]) < 18:
-            dim = int(18 - (now["sunrise"] - now["dt"]) / 18.0 * 255.0)
+        if (now["sunrise"] - now["dt"]) < 1080:
+            dim = int(1080 - (now["sunrise"] - now["dt"]) / 1080.0 * 255.0)
             skyColor = (192, 128, 192) # Dawn is purple
         else:
             dim = 255
             skyColor = (0, 0, 0)
     # After sunset
     elif now["dt"] > now["sunset"]:
-        if (now["dt"] - now["sunset"]) < 18:
-            dim = int(18 - (now["dt"] - now["sunset"]) / 18.0 * 255.0)
+        if (now["dt"] - now["sunset"]) < 1080:
+            dim = int(1080 - (now["dt"] - now["sunset"]) / 1080.0 * 255.0)
             skyColor = (255, 192, 128) # Sunset is orange
         else:
             dim = 255
@@ -130,7 +130,7 @@ def getWeatherImage():
         dim = 255
         skyColor = (128, 128, 255)
 
-    draw.rectangle([(30,0),  (64, 32)], fill=(skyColor + (int((18.0 - dim) / 18.0 * 255.0),)))
+    draw.rectangle([(30,0),  (64, 32)], fill=(skyColor + (dim ,)))
 
     for x in range(24):
         hour = payload["hourly"][x+1]
@@ -152,20 +152,27 @@ def getWeatherImage():
             # draw.point((diff + 27, x), fill=(64, 64, 128))
             draw.point((27, x+4), fill=(32, 32, 128))
 
+    phase = ((round(payload["daily"][0]["moon_phase"] * 8) + 11))
 
-    iconImage = Image.open(filename)
-    iconImage = iconImage.resize((40, 40), resample=Image.LANCZOS)
-    canvas.paste(iconImage, (28, -3), mask=iconImage)
+    if now["dt"] > now["sunset"] or now["sunrise"] > now["dt"]:
+        iconImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase))
+        iconImage = iconImage.resize((30, 30), resample=Image.LANCZOS)
+        iconImage = ImageEnhance.Brightness(iconImage).enhance(0.5)
+        canvas.paste(iconImage, (33, 1), mask=iconImage)
+    else:
+        iconImage = Image.open(filename)
+        iconImage = iconImage.resize((40, 40), resample=Image.LANCZOS)
+        canvas.paste(iconImage, (28, -3), mask=iconImage)
 
     tempString = "%.0f°" % (ktof(now["temp"]))
     humidityString = "%.0f%%" % ((now["humidity"]))
     windString = "%.0f mph" % ((now["wind_speed"] * 2.237))
     pressureString = "%.1f\"" % ((now["pressure"] * 0.0295301))
 
-    txtImg = getTextImage([(tempString, (1, -2), ttfFont, (224, 224, 192)),
-                           (humidityString, (1, 7), ttfFont, (192, 224, 192)),
-                           (windString, (1, 17), ttfFontSm, (192, 224, 192)),
-                           (pressureString, (1, 24), ttfFontSm, (192, 192, 192))],
+    txtImg = getTextImage([(tempString, (1, -2), ttfFont, (192, 192, 128)),
+                           (humidityString, (1, 7), ttfFont, (128, 192, 128)),
+                           (windString, (1, 17), ttfFontSm, (128, 192, 192)),
+                           (pressureString, (1, 24), ttfFontSm, (128, 128, 128))],
                            textColor)
 
     return Image.alpha_composite(canvas, txtImg).convert('RGB')
