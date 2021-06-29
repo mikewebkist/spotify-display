@@ -50,7 +50,7 @@ class Frame:
         return round(pow(value / 255.0, 1.8) * 255.0)
 
     def swap(self, canvas):
-        canvas = Image.eval(canvas, gamma)
+        canvas = Image.eval(canvas, Frame.gamma)
         self.offscreen_canvas.SetImage(canvas, 0, 0)
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
