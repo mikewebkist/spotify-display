@@ -178,11 +178,11 @@ def getWeatherImage():
 class Frame:
     def __init__(self):
         self.matrix = RGBMatrix(options=options)
-        self.offscreen_canvas = matrix.CreateFrameCanvas()
+        self.offscreen_canvas = self.matrix.CreateFrameCanvas()
     
     def swap(self, canvas):
         self.offscreen_canvas.SetImage(canvas, 0, 0)
-        self.offscreen_canvas = matrix.SwapOnVSync(self.offscreen_canvas)
+        self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
 def main():
     frame = Frame()
