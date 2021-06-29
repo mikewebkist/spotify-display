@@ -31,12 +31,28 @@ if len(sys.argv) > 1:
 logging.basicConfig(filename='/tmp/spotify-matrix.log',level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def gamma_builder(gamma_in):
-    def gamma(value):
-        return int(pow(value / 255, gamma_in) * 255)
-    return gamma
+class Frame:
+    def __init__(self):
+        self.options = RGBMatrixOptions()
+        self.options.brightness = 75
+        self.options.hardware_mapping = "adafruit-hat-pwm"
+        self.options.rows = 32
+        self.options.cols = 64
+        self.options.disable_hardware_pulsing = False
+        self.options.gpio_slowdown = 3
 
-gamma = gamma_builder(1.8)
+        self.matrix = RGBMatrix(options=self.options)
+        self.offscreen_canvas = self.matrix.CreateFrameCanvas()
+        self.width = self.options.cols
+        self.height = self.options.rows
+    
+    def gamma(value):
+        return round(pow(value / 255.0, 1.8) * 255.0)
+
+    def swap(self, canvas):
+        canvas = Image.eval(canvas, gamma)
+        self.offscreen_canvas.SetImage(canvas, 0, 0)
+        self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
 def rawImage(url):
     # We're going to save the processed image instead of the raw one.
@@ -56,10 +72,7 @@ def rawImage(url):
 
 def processedImage(url):
     image = rawImage(url)
-    # Art looks slightly better with more contrast and a litte darker
-    image = Image.eval(image, gamma)
     image = ImageEnhance.Color(image).enhance(0.5)
-    # image = ImageEnhance.Contrast(image).enhance(0.95)
     image = ImageEnhance.Brightness(image).enhance(0.85)
     return image
 
@@ -79,8 +92,7 @@ def getTextImage(texts, color):
         draw.text((x,     y    ), text, lineColor,   font=lineFont)
     return txtImg
 
-textColor = (gamma(192), gamma(192), gamma(192))
-# textColor = (255, 255, 255)
+textColor = (192, 192, 192)
 
 def ktof(k):
     return (k - 273.15) * 1.8 + 32.0
@@ -166,25 +178,6 @@ def getWeatherImage():
                            textColor)
 
     return Image.alpha_composite(canvas, txtImg).convert('RGB')
-
-class Frame:
-    def __init__(self):
-        self.options = RGBMatrixOptions()
-        self.options.brightness = 75
-        self.options.hardware_mapping = "adafruit-hat-pwm"
-        self.options.rows = 32
-        self.options.cols = 64
-        self.options.disable_hardware_pulsing = False
-        self.options.gpio_slowdown = 3
-
-        self.matrix = RGBMatrix(options=self.options)
-        self.offscreen_canvas = self.matrix.CreateFrameCanvas()
-        self.width = self.options.cols
-        self.height = self.options.rows
-    
-    def swap(self, canvas):
-        self.offscreen_canvas.SetImage(canvas, 0, 0)
-        self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
 def main():
     frame = Frame()
