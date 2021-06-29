@@ -175,14 +175,21 @@ def getWeatherImage():
 
     return Image.alpha_composite(canvas, txtImg).convert('RGB')
 
+class Frame:
+    def __init__(self):
+        self.matrix = RGBMatrix(options=options)
+        self.offscreen_canvas = matrix.CreateFrameCanvas()
+    
+    def swap(self, canvas):
+        self.offscreen_canvas.SetImage(canvas, 0, 0)
+        self.offscreen_canvas = matrix.SwapOnVSync(self.offscreen_canvas)
+
 def main():
-    matrix = RGBMatrix(options=options)
-    cache_handler = CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username))
-    offscreen_canvas = matrix.CreateFrameCanvas()
+    frame = Frame()
 
     sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=os.environ["SPOTIFY_ID"],
                                                    client_secret=os.environ["SPOTIFY_SECRET"],
-                                                   cache_handler=cache_handler,
+                                                   cache_handler=CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username)),
                                                    redirect_uri="http://localhost:8080/callback",
                                                    show_dialog=True,
                                                    open_browser=False,
@@ -254,8 +261,7 @@ def main():
                 for x in range(127):
                     imageDim = ImageEnhance.Brightness(image).enhance(x * 2 / 255.0)
                     canvas.paste(imageDim, (32, 0))
-                    offscreen_canvas.SetImage(canvas, 0, 0)
-                    offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
+                    frame.swap(canvas)
                 time.sleep(0.5)
 
             # Length of the longest line of text, in pixels.
@@ -271,8 +277,8 @@ def main():
                             (artistName, (options.cols - x, 20))
                         ], textColor)
 
-                    offscreen_canvas.SetImage(Image.alpha_composite(canvas, txtImg).convert('RGB'), 0, 0)
-                    offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
+
+                    frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
                     time.sleep(0.025)
 
                 time.sleep(1.25)
@@ -288,18 +294,13 @@ def main():
 
                         txtImg = getTextImage([(trackName, (0, 10)), (artistName, (0, 20))], textColorFade)
 
-                        offscreen_canvas.SetImage(Image.alpha_composite(canvas, txtImg).convert('RGB'), 0, 0)
-                        offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
-
-                        # offscreen_canvas.SetImage(ImageChops.logical_xor(canvas, txt).convert('RGB'), 0, 0)
+                        frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
                 canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
                 canvas.paste(image, (32, 0))
 
                 txtImg = getTextImage([(trackName, (0, 10)), (artistName, (0, 20))], textColor)
 
-                offscreen_canvas.SetImage(Image.alpha_composite(canvas, txtImg).convert('RGB'), 0, 0)
-                offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
-
+                frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
                 time.sleep(2.0)
 
         # Nothing is playing
@@ -317,8 +318,7 @@ def main():
                 else:
                     weatherCooldownUntil = time.time() + 5 * 60.0
                 
-            offscreen_canvas.SetImage(weatherImage.convert('RGB'), 0, 0)
-            offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
+            frame.swap(weatherImage.convert('RGB'))
             time.sleep(1.0)
 
 main()
