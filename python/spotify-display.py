@@ -112,8 +112,11 @@ class Weather:
         r = urllib.request.urlopen(Weather.api)
         self._payload = simplejson.loads(r.read())
         self._now = self._payload["current"]
-        self.nextupdate = time.time() + (60 * 5) # Five minutes
-    
+        if time.localtime()[3] <= 5:      
+            self.nextupdate = time.time() + (60 * 30) # Five minutes
+        else:
+            self.nextupdate = time.time() + (60 * 5) # Five minutes
+        
     def night(self):
         if self._now["dt"] > (self._now["sunset"] + 1080) or self._now["dt"] < (self._now["sunrise"] - 1080):
             return True
@@ -191,10 +194,12 @@ class Weather:
         windString = "%.0f mph" % (self.wind_speed())
         pressureString = "%.1f\"" % (self.pressure())
 
-        txtImg = getTextImage([(tempString, (1, -2), ttfFont, (192, 192, 128)),
+        txtImg = getTextImage([
+                            (tempString, (1, -2), ttfFont, (192, 192, 128)),
                             (humidityString, (1, 7), ttfFont, (128, 192, 128)),
                             (windString, (1, 17), ttfFontSm, (128, 192, 192)),
-                            (pressureString, (1, 24), ttfFontSm, (128, 128, 128))],
+                            (pressureString, (1, 24), ttfFontSm, (128, 128, 128))
+                            ],
                             textColor)
 
         return Image.alpha_composite(canvas, txtImg).convert('RGB')
@@ -202,7 +207,7 @@ class Weather:
 def main():
     frame = Frame()
     weather = Weather()
-    
+
     sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=os.environ["SPOTIFY_ID"],
                                                    client_secret=os.environ["SPOTIFY_SECRET"],
                                                    cache_handler=CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username)),
@@ -214,8 +219,6 @@ def main():
     user = sp.current_user()
     logger.info("Now Playing for %s [%s]" % (user["display_name"], user["id"]))
 
-    weatherImage = None
-    weatherCooldownUntil = time.time()
     cooldownUntil = time.time() * 1000.0
     nowPlaying = None
     lastSong = ""
@@ -326,8 +329,7 @@ def main():
                 lastSong = "nothing playing"
 
             weatherImage = weather.image()
-                
             frame.swap(weatherImage.convert('RGB'))
-            time.sleep(1.0)
+            time.sleep(10)
 
 main()
