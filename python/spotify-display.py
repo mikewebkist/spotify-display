@@ -213,13 +213,13 @@ class Music:
                                         show_dialog=True,
                                         open_browser=False,
                                         scope="user-library-read,user-read-playback-state"))
-        user = sp.current_user()
+        user = self._spotify.current_user()
         logger.info("Now Playing for %s [%s]" % (user["display_name"], user["id"]))
         self.nextupdate = 0
         self._update()
 
     def timeleft(self):
-        return round((self._nowplaying["item"]["duration_ms"] - self.nowplaying["progress_ms"]) / 1000.0)
+        return round((self._nowplaying["item"]["duration_ms"] - self._nowplaying["progress_ms"]) / 1000.0)
 
     def nowplaying(self):
         if self._nowplaying and self._nowplaying["is_playing"] and self._nowplaying["item"]:
@@ -232,7 +232,7 @@ class Music:
             return self.nextupdate - time.time()
 
         try:
-            self._nowplaying = sp.current_user_playing_track()
+            self._nowplaying = self._spotify.current_user_playing_track()
         except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as err:
             logger.error("Problem getting current_user_playing_track")
             logger.error(err)
