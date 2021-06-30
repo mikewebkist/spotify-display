@@ -109,7 +109,14 @@ class Weather:
         if time.time() < self.nextupdate:
             return False
 
-        r = urllib.request.urlopen(Weather.api)
+        try:
+            r = urllib.request.urlopen(Weather.api)
+        except http.client.RemoteDisconnected as err:
+            logger.error("Problem getting weather")
+            logger.error(err)
+            time.sleep(30)
+            return self.nextupdate - time.time()
+
         self._payload = simplejson.loads(r.read())
         self._now = self._payload["current"]
         if time.localtime()[3] <= 5:      
@@ -127,7 +134,7 @@ class Weather:
         if self.night():
             phase = ((round(self._payload["daily"][0]["moon_phase"] * 8) + 11))
             moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase))
-            return ImageEnhance.Brightness(moonImage).enhance(0.5).resize((30, 30), resample=Image.LANCZOS)
+            return moonImage.resize((30, 30), resample=Image.LANCZOS)
         else:
             icon = self._now["weather"][0]["icon"]
             url = "http://openweathermap.org/img/wn/%s.png" % (icon)
