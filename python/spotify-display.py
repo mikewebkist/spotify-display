@@ -273,15 +273,15 @@ def main():
         # We have a playing track.
         if music.nowplaying():
             nowPlaying = music._nowplaying
-            if lastAlbum != self.album_id:
-                lastAlbum = self.album_id
+            if lastAlbum != music.album_id:
+                lastAlbum = music.album_id
                 firstRunThisAlbum = True
             else:
                 firstRunThisAlbum = False
 
-            if lastSong != self.track_id:
-                logger.info(u'%s - %s' % (self.track, self.artist))
-                lastSong = self.track_id
+            if lastSong != music.track_id:
+                logger.info(u'%s - %s' % (music.track, music.artist))
+                lastSong = music.track_id
                 firstRunThisSong = True
             else:
                 firstRunThisSong = False
@@ -300,7 +300,7 @@ def main():
                 time.sleep(0.5)
 
             # Length of the longest line of text, in pixels.
-            length = max(ttfFont.getsize(self.track)[0], ttfFont.getsize(self.artist)[0])
+            length = max(ttfFont.getsize(music.track)[0], ttfFont.getsize(music.artist)[0])
 
             # If either line of text is longer than the display, scroll
             if length >= frame.width:
@@ -308,8 +308,8 @@ def main():
                     canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
                     canvas.paste(image, (32, 0))
                     txtImg = getTextImage([
-                            (self.track, (frame.width - x, 10)),
-                            (self.artist, (frame.width - x, 20))
+                            (music.track, (frame.width - x, 10)),
+                            (music.artist, (frame.width - x, 20))
                         ], textColor)
 
 
@@ -327,13 +327,13 @@ def main():
                         canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
                         canvas.paste(image, (32, 0))
 
-                        txtImg = getTextImage([(self.track, (0, 10)), (self.artist, (0, 20))], textColorFade)
+                        txtImg = getTextImage([(music.track, (0, 10)), (music.artist, (0, 20))], textColorFade)
 
                         frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
                 canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
                 canvas.paste(image, (32, 0))
 
-                txtImg = getTextImage([(self.track, (0, 10)), (self.artist, (0, 20))], textColor)
+                txtImg = getTextImage([(music.track, (0, 10)), (music.artist, (0, 20))], textColor)
 
                 frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
                 time.sleep(2.0)
