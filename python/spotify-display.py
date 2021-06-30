@@ -104,7 +104,6 @@ class Weather:
     def __init__(self):
         self.nextupdate = 0
         self._update()
-        return self
     
     def _update(self):
         if time.time() < self.nextupdate:
@@ -158,7 +157,7 @@ class Weather:
         canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
         draw = ImageDraw.Draw(canvas)
         
-        if weather.night():
+        if self.night():
             skyColor = (0, 0, 0)
         else:
             skyColor = (128, 128, 255)
@@ -183,9 +182,9 @@ class Weather:
             else:
                 draw.point((28, x+4), fill=(32, 32, 32))
 
-        iconImage = weather.icon()
+        iconImage = self.icon()
         # Moon: (33, 1), Weather: (28, -3)
-        canvas.paste(iconImage, (28, -3) mask=iconImage)
+        canvas.paste(iconImage, (33, 1), mask=iconImage)
 
         tempString = "%.0f°" % (self.temp())
         humidityString = "%.0f%%" % (self.humidity())
