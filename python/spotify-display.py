@@ -15,8 +15,6 @@ from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops
 import urllib
 import requests
 
-ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
-ttfFontSm = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 7)
 username = "mikewebkist"
 
 basepath = os.path.dirname(sys.argv[0])
@@ -24,6 +22,9 @@ if basepath == "":
     basepath = "."
 
 image_cache = "%s/imagecache" % (basepath)
+
+ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
+ttfFontSm = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 7)
 
 if len(sys.argv) > 1:
     username = sys.argv[1]
@@ -101,7 +102,9 @@ class Weather:
     api = "https://api.openweathermap.org/data/2.5/onecall?lat=39.9623348&lon=-75.1927043&appid=%s" % (os.environ["OPENWEATHER_API"])
 
     def __init__(self):
-        self.nextupdate = time.time()
+        self.nextupdate = 0
+        self._update()
+        return self
     
     def _update(self):
         if time.time() < self.nextupdate:
@@ -110,97 +113,97 @@ class Weather:
         r = urllib.request.urlopen(Weather.api)
         self._payload = simplejson.loads(r.read())
         self._now = self._payload["current"]
+        self.nextupdate = time.time() + (60 * 5) # Five minutes
     
+    def night(self):
+        if self._now["dt"] > (self._now["sunset"] + 1080) or self._now["dt"] < (self._now["sunrise"] - 1080):
+            return True
+        else:
+            return False
+
     def icon(self):
+        if self.night():
+            phase = ((round(self._payload["daily"][0]["moon_phase"] * 8) + 11))
+            moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase))
+            return ImageEnhance.Brightness(moonImage).enhance(0.5).resize((30, 30), resample=Image.LANCZOS)
+        else:
+            iconcon = self._now["weather"][0]["icon"]
+            url = "http://openweathermap.org/img/wn/%s.png" % (icon)
+            filename = "%s/%s.png" % (image_cache, icon)
+            if not os.path.isfile(filename):
+                logger.info("Getting %s" % url)
+                urllib.request.urlretrieve(url, filename)
+
+                iconImage = Image.open(filename)
+                return iconImage.resize((40, 40), resample=Image.LANCZOS)
+
+    def hour(self, hour):
+        return self._payload["hourly"][hour]
+
+    def temp(self):
+        return ktof(self._payload["current"]["temp"])
+
+    def humidity(self):
+        return self._payload["current"]["humidity"]
+
+    def wind_speed(self):
+        return self._payload["current"]["wind_speed"] * 2.237
+
+    def pressure(self):
+        return self._payload["current"]["pressure"] * 0.0295301
+
+    def image(self):
+        self._update()
+
+        canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
         
-    
-
-
-def getWeatherImage():
-    r = urllib.request.urlopen("https://api.openweathermap.org/data/2.5/onecall?lat=39.9623348&lon=-75.1927043&appid=%s" % (os.environ["OPENWEATHER_API"]))
-    payload = simplejson.loads(r.read())
-    now = payload["current"]
-    icon = now["weather"][0]["icon"]
-    logger.info(now["weather"][0]["main"])
-
-    url = "http://openweathermap.org/img/wn/%s.png" % (icon)
-    filename = "%s/%s.png" % (image_cache, icon)
-    if not os.path.isfile(filename):
-        logger.info("Getting %s" % url)
-        urllib.request.urlretrieve(url, filename)
-
-    canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
-    draw = ImageDraw.Draw(canvas)
-
-    # Before sunrise
-    if now["dt"] < now["sunrise"]:
-        if (now["sunrise"] - now["dt"]) < 1080:
-            dim = int(1080 - (now["sunrise"] - now["dt"]) / 1080.0 * 255.0)
-            skyColor = (192, 128, 192) # Dawn is purple
-        else:
-            dim = 255
+        if weather.night():
             skyColor = (0, 0, 0)
-    # After sunset
-    elif now["dt"] > now["sunset"]:
-        if (now["dt"] - now["sunset"]) < 1080:
-            dim = int(1080 - (now["dt"] - now["sunset"]) / 1080.0 * 255.0)
-            skyColor = (255, 192, 128) # Sunset is orange
         else:
-            dim = 255
-            skyColor = (0, 0, 0)
-    # Day
-    else:
-        dim = 255
-        skyColor = (128, 128, 255)
+            skyColor = (128, 128, 255)
 
-    draw.rectangle([(32,0),  (64, 32)], fill=(skyColor + (dim ,)))
+        draw.rectangle([(32,0),  (64, 32)], fill=(skyColor + (255 ,)))
 
-    for x in range(24):
-        hour = payload["hourly"][x+1]
-        t = time.localtime(hour["dt"])
-        if t[3] == 0:
-            draw.line([(26, x+4), (28, x+4)], fill=(64, 64, 64))
-        if t[3] in [6, 18]:
-            draw.line([(27, x+4), (29, x+4)], fill=(64, 64, 64))
-        if t[3] == 12:
-            draw.line([(28, x+4), (30, x+4)], fill=(64, 64, 64))
+        for x in range(24):
+            hour = self.hour(x+1)
+            t = time.localtime(hour["dt"])
+            if t[3] == 0:
+                draw.line([(26, x+4), (28, x+4)], fill=(64, 64, 64))
+            if t[3] in [6, 18]:
+                draw.line([(27, x+4), (29, x+4)], fill=(64, 64, 64))
+            if t[3] == 12:
+                draw.line([(28, x+4), (30, x+4)], fill=(64, 64, 64))
 
-        diff = hour["temp"] - payload["hourly"][x]["temp"]
-        if diff > 1.0:
-            draw.point((28, x+4), fill=(128, 64, 32))
-        elif diff < -1.0:
-            draw.point((28, x+4), fill=(32, 32, 128))
-        else:
-            draw.point((28, x+4), fill=(32, 32, 32))
+            diff = hour["temp"] - self.hour(x)["temp"]
+            if diff > 1.0:
+                draw.point((28, x+4), fill=(128, 64, 32))
+            elif diff < -1.0:
+                draw.point((28, x+4), fill=(32, 32, 128))
+            else:
+                draw.point((28, x+4), fill=(32, 32, 32))
 
-    phase = ((round(payload["daily"][0]["moon_phase"] * 8) + 11))
+        iconImage = weather.icon()
+        # Moon: (33, 1), Weather: (28, -3)
+        canvas.paste(iconImage, (28, -3) mask=iconImage)
 
-    if now["dt"] > (now["sunset"] + 1080) or (now["sunrise"] - 1080 ) > now["dt"]:
-        iconImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase))
-        iconImage = iconImage.resize((30, 30), resample=Image.LANCZOS)
-        iconImage = ImageEnhance.Brightness(iconImage).enhance(0.5)
-        canvas.paste(iconImage, (33, 1), mask=iconImage)
-    else:
-        iconImage = Image.open(filename)
-        iconImage = iconImage.resize((40, 40), resample=Image.LANCZOS)
-        canvas.paste(iconImage, (28, -3), mask=iconImage)
+        tempString = "%.0f°" % (self.temp())
+        humidityString = "%.0f%%" % (self.humidity())
+        windString = "%.0f mph" % (self.wind_speed())
+        pressureString = "%.1f\"" % (self.pressure())
 
-    tempString = "%.0f°" % (ktof(now["temp"]))
-    humidityString = "%.0f%%" % ((now["humidity"]))
-    windString = "%.0f mph" % ((now["wind_speed"] * 2.237))
-    pressureString = "%.1f\"" % ((now["pressure"] * 0.0295301))
+        txtImg = getTextImage([(tempString, (1, -2), ttfFont, (192, 192, 128)),
+                            (humidityString, (1, 7), ttfFont, (128, 192, 128)),
+                            (windString, (1, 17), ttfFontSm, (128, 192, 192)),
+                            (pressureString, (1, 24), ttfFontSm, (128, 128, 128))],
+                            textColor)
 
-    txtImg = getTextImage([(tempString, (1, -2), ttfFont, (192, 192, 128)),
-                           (humidityString, (1, 7), ttfFont, (128, 192, 128)),
-                           (windString, (1, 17), ttfFontSm, (128, 192, 192)),
-                           (pressureString, (1, 24), ttfFontSm, (128, 128, 128))],
-                           textColor)
-
-    return Image.alpha_composite(canvas, txtImg).convert('RGB')
+        return Image.alpha_composite(canvas, txtImg).convert('RGB')
 
 def main():
     frame = Frame()
-
+    weather = Weather()
+    
     sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=os.environ["SPOTIFY_ID"],
                                                    client_secret=os.environ["SPOTIFY_SECRET"],
                                                    cache_handler=CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username)),
@@ -323,14 +326,7 @@ def main():
                 logger.info("Nothing playing...")
                 lastSong = "nothing playing"
 
-            if weatherImage == None or weatherCooldownUntil < time.time():
-                logger.info("%d %d" % (weatherCooldownUntil, time.time()))
-                weatherImage = getWeatherImage()
-                # Update every 30 minutes in the middle of the night, otherwise every five mins.
-                if time.localtime()[3] <= 5:
-                    weatherCooldownUntil = time.time() + 30 * 60.0
-                else:
-                    weatherCooldownUntil = time.time() + 5 * 60.0
+            weatherImage = weather.image()
                 
             frame.swap(weatherImage.convert('RGB'))
             time.sleep(1.0)
