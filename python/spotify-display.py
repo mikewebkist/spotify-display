@@ -187,7 +187,6 @@ class Weather:
                 draw.point((28, x+4), fill=(32, 32, 32))
 
         iconImage = self.icon()
-        # Moon: (33, 1), Weather: (28, -3)
         canvas.paste(iconImage, (33, 1), mask=iconImage)
 
         tempString = "%.0f°" % (self.temp())
@@ -205,57 +204,69 @@ class Weather:
 
         return Image.alpha_composite(canvas, txtImg).convert('RGB')
 
+class Music:
+    def __init__(self):
+        self._spotify = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=os.environ["SPOTIFY_ID"],
+                                        client_secret=os.environ["SPOTIFY_SECRET"],
+                                        cache_handler=CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username)),
+                                        redirect_uri="http://localhost:8080/callback",
+                                        show_dialog=True,
+                                        open_browser=False,
+                                        scope="user-library-read,user-read-playback-state"))
+        user = sp.current_user()
+        logger.info("Now Playing for %s [%s]" % (user["display_name"], user["id"]))
+        self.nextupdate = 0
+        self._update()
+
+    def timeleft(self):
+        return round((self._nowplaying["item"]["duration_ms"] - self.nowplaying["progress_ms"]) / 1000.0)
+
+    def nowplaying(self):
+        if self._nowplaying and self._nowplaying["is_playing"] and self._nowplaying["item"]:
+            return True
+        else:
+            return False
+
+    def _update(self):
+        if time.time() < self.nextupdate:
+            return self.nextupdate - time.time()
+
+        try:
+            self._nowplaying = sp.current_user_playing_track()
+        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as err:
+            logger.error("Problem getting current_user_playing_track")
+            logger.error(err)
+            time.sleep(10)
+
+        if not self.nowplaying():
+            if time.localtime()[3] <= 5:
+                self.nextupdate = time.time() + (5 * 60) # check in 5 minutes
+            else:
+                self.nextupdate = time.time() + 30 # check in 30 seconds
+            return False
+        elif self.timeleft() > 30:
+            self.nextupdate = time.time() + 10
+        else:
+            self.nextupdate = time.time() + self.timeleft()
+
+        return self.nextupdate - time.time()
+
 def main():
     frame = Frame()
     weather = Weather()
+    music = Music()
 
-    sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=os.environ["SPOTIFY_ID"],
-                                                   client_secret=os.environ["SPOTIFY_SECRET"],
-                                                   cache_handler=CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username)),
-                                                   redirect_uri="http://localhost:8080/callback",
-                                                   show_dialog=True,
-                                                   open_browser=False,
-                                                   scope="user-library-read,user-read-playback-state"))
-
-    user = sp.current_user()
-    logger.info("Now Playing for %s [%s]" % (user["display_name"], user["id"]))
-
-    cooldownUntil = time.time() * 1000.0
-    nowPlaying = None
     lastSong = ""
     lastAlbum = ""
     firstRunThisSong = True
     firstRunThisAlbum = True
 
     while True:
-
-        if (time.time() * 1000.0) > cooldownUntil:
-            # Try getting the current track.
-            try:
-                nowPlaying = sp.current_user_playing_track()
-                if nowPlaying and nowPlaying["is_playing"] and nowPlaying["item"]:
-                    # For the first 30 seconds of the song, check every 3 seconds.
-                    if nowPlaying["progress_ms"] < (30.0 * 1000):
-                        cooldownUntil = (time.time() + 3) * 1000.0
-                    # At the end of the song, try to time it close.
-                    elif (nowPlaying["item"]["duration_ms"] - nowPlaying["progress_ms"]) < (30.0 * 1000.0):
-                        cooldownUntil = (time.time() * 1000.0) + (nowPlaying["item"]["duration_ms"] - nowPlaying["progress_ms"])
-                    # Otherwise, try every 10 seconds while playing.
-                    else:
-                        cooldownUntil = (time.time() * 1000.0) + (10.0 * 1000.0)
-                else:
-                    cooldownUntil = (time.time() + 30) * 1000.0
-
-            except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as err:
-                logger.error("Problem getting current_user_playing_track")
-                logger.error(err)
-                time.sleep(30)
-                continue
-        else:
-            logger.debug("not checking the track for %0.2f secs" % ((cooldownUntil - time.time() * 1000.0) / 1000.0))
+        music._update()
 
         # We have a playing track.
-        if nowPlaying and nowPlaying["is_playing"] and nowPlaying["item"]:
+        if music.nowplaying():
+            nowPlaying = music._nowplaying
             trackName = nowPlaying["item"]["name"]
             artistName = ", ".join(map(lambda x: x["name"], nowPlaying["item"]["artists"]))
             if lastAlbum != nowPlaying["item"]["album"]["id"]:
