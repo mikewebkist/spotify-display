@@ -129,15 +129,16 @@ class Weather:
             moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase))
             return ImageEnhance.Brightness(moonImage).enhance(0.5).resize((30, 30), resample=Image.LANCZOS)
         else:
-            iconcon = self._now["weather"][0]["icon"]
+            icon = self._now["weather"][0]["icon"]
             url = "http://openweathermap.org/img/wn/%s.png" % (icon)
             filename = "%s/%s.png" % (image_cache, icon)
             if not os.path.isfile(filename):
                 logger.info("Getting %s" % url)
                 urllib.request.urlretrieve(url, filename)
 
-                iconImage = Image.open(filename).crop((10, 10, 90, 90))
-                return iconImage.resize((40, 40), resample=Image.LANCZOS)
+            iconImage = Image.open(filename)
+            iconImage = iconImage.crop((4, 4, 46, 46))
+            return iconImage.resize((30, 30), resample=Image.LANCZOS)
 
     def hour(self, hour):
         return self._payload["hourly"][hour]
