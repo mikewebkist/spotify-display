@@ -97,6 +97,25 @@ textColor = (192, 192, 192)
 def ktof(k):
     return (k - 273.15) * 1.8 + 32.0
 
+class Weather:
+    api = "https://api.openweathermap.org/data/2.5/onecall?lat=39.9623348&lon=-75.1927043&appid=%s" % (os.environ["OPENWEATHER_API"])
+
+    def __init__(self):
+        self.nextupdate = time.time()
+    
+    def _update(self):
+        if time.time() < self.nextupdate:
+            return False
+
+        r = urllib.request.urlopen(Weather.api)
+        self._payload = simplejson.loads(r.read())
+        self._now = self._payload["current"]
+    
+    def icon(self):
+        
+    
+
+
 def getWeatherImage():
     r = urllib.request.urlopen("https://api.openweathermap.org/data/2.5/onecall?lat=39.9623348&lon=-75.1927043&appid=%s" % (os.environ["OPENWEATHER_API"]))
     payload = simplejson.loads(r.read())
