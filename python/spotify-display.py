@@ -237,6 +237,7 @@ class Music:
             logger.error("Problem getting current_user_playing_track")
             logger.error(err)
             time.sleep(10)
+            return self.nextupdate - time.time()
 
         if not self.nowplaying():
             if time.localtime()[3] <= 5:
@@ -249,6 +250,11 @@ class Music:
         else:
             self.nextupdate = time.time() + self.timeleft()
 
+        if self.nowplaying():
+            self.track = self._nowplaying["item"]["name"]
+            self.artist = ", ".join(map(lambda x: x["name"], self._nowplaying["item"]["artists"]))
+            self.album_id = self._nowplaying["item"]["album"]["id"]
+            self.track_id = self._nowplaying["item"]["id"]        
         return self.nextupdate - time.time()
 
 def main():
@@ -267,17 +273,15 @@ def main():
         # We have a playing track.
         if music.nowplaying():
             nowPlaying = music._nowplaying
-            trackName = nowPlaying["item"]["name"]
-            artistName = ", ".join(map(lambda x: x["name"], nowPlaying["item"]["artists"]))
-            if lastAlbum != nowPlaying["item"]["album"]["id"]:
-                lastAlbum = nowPlaying["item"]["album"]["id"]
+            if lastAlbum != self.album_id:
+                lastAlbum = self.album_id
                 firstRunThisAlbum = True
             else:
                 firstRunThisAlbum = False
 
-            if lastSong != nowPlaying["item"]["id"]:
-                logger.info(u'%s - %s' % (trackName, artistName))
-                lastSong = nowPlaying["item"]["id"]
+            if lastSong != self.track_id:
+                logger.info(u'%s - %s' % (self.track, self.artist))
+                lastSong = self.track_id
                 firstRunThisSong = True
             else:
                 firstRunThisSong = False
@@ -296,7 +300,7 @@ def main():
                 time.sleep(0.5)
 
             # Length of the longest line of text, in pixels.
-            length = max(ttfFont.getsize(trackName)[0], ttfFont.getsize(artistName)[0])
+            length = max(ttfFont.getsize(self.track)[0], ttfFont.getsize(self.artist)[0])
 
             # If either line of text is longer than the display, scroll
             if length >= frame.width:
@@ -304,8 +308,8 @@ def main():
                     canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
                     canvas.paste(image, (32, 0))
                     txtImg = getTextImage([
-                            (trackName, (frame.width - x, 10)),
-                            (artistName, (frame.width - x, 20))
+                            (self.track, (frame.width - x, 10)),
+                            (self.artist, (frame.width - x, 20))
                         ], textColor)
 
 
@@ -323,13 +327,13 @@ def main():
                         canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
                         canvas.paste(image, (32, 0))
 
-                        txtImg = getTextImage([(trackName, (0, 10)), (artistName, (0, 20))], textColorFade)
+                        txtImg = getTextImage([(self.track, (0, 10)), (self.artist, (0, 20))], textColorFade)
 
                         frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
                 canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
                 canvas.paste(image, (32, 0))
 
-                txtImg = getTextImage([(trackName, (0, 10)), (artistName, (0, 20))], textColor)
+                txtImg = getTextImage([(self.track, (0, 10)), (self.artist, (0, 20))], textColor)
 
                 frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
                 time.sleep(2.0)
