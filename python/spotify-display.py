@@ -136,7 +136,7 @@ class Weather:
                 logger.info("Getting %s" % url)
                 urllib.request.urlretrieve(url, filename)
 
-                iconImage = Image.open(filename)
+                iconImage = Image.open(filename).crop((10, 10, 90, 90))
                 return iconImage.resize((40, 40), resample=Image.LANCZOS)
 
     def hour(self, hour):
