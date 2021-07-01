@@ -11,7 +11,7 @@ from spotipy.oauth2 import SpotifyOAuth
 from spotipy.cache_handler import CacheFileHandler
 import simplejson
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
-from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops
+from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilter
 import urllib
 import requests
 
@@ -25,6 +25,7 @@ image_cache = "%s/imagecache" % (basepath)
 
 ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
 ttfFontSm = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 7)
+weatherFont = ImageFont.truetype("%s/weathericons-regular-webfont.ttf" % basepath, 20)
 
 if len(sys.argv) > 1:
     username = sys.argv[1]
@@ -35,7 +36,7 @@ logger = logging.getLogger(__name__)
 class Frame:
     def __init__(self):
         self.options = RGBMatrixOptions()
-        self.options.brightness = 75
+        self.options.brightness = 100
         self.options.hardware_mapping = "adafruit-hat-pwm"
         self.options.rows = 32
         self.options.cols = 64
@@ -105,6 +106,15 @@ class Weather:
         self.nextupdate = 0
         self._update()
     
+    def icontext(self):
+        # return False
+        with open("%s/font-icon-map.tsv" % basepath, "r") as f:
+            for line in f:
+                num, daypart, ustr = line.rstrip().split("\t")
+                if daypart == "day":
+                    if int(self._now["weather"][0]["id"]) == int(num):
+                        return chr(int(ustr, 16))
+
     def _update(self):
         if time.time() < self.nextupdate:
             return False
@@ -132,20 +142,45 @@ class Weather:
 
     def icon(self):
         if self.night():
+            skyColor = (0, 0, 0)
+        else:
+            clouds = self._now["clouds"] / 100.0
+            skyColor = (int(clouds * 64 + 96), int(clouds * 64 + 96), int(255 - clouds * 96))
+
+        iconBox = Image.new('RGBA', (32, 32), skyColor)
+
+        # canvas.paste(iconImage, (33, 1), mask=iconImage)
+        if self.night():
             phase = ((round(self._payload["daily"][0]["moon_phase"] * 8) + 11))
             moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase))
-            return moonImage.resize((30, 30), resample=Image.LANCZOS)
+            iconBox.paste(moonImage.resize((30, 30), resample=Image.LANCZOS), (1, 1), mask=moonImage)
+
+        elif self.icontext():
+            draw = ImageDraw.Draw(iconBox)
+            draw.fontmode = "L"
+            w, h = draw.textsize(self.icontext(), font=weatherFont)
+            x = (32 - w) / 2 + 1
+            y = (32 - h) / 2
+
+            # draw.text((x - 1, y + 1), self.icontext(), (0,0,0), font=weatherFont)
+            draw.text((x, y), self.icontext(), (0,0,255), font=weatherFont)
+            iconBox = iconBox.filter(ImageFilter.GaussianBlur(radius=2))
+            draw = ImageDraw.Draw(iconBox)
+            draw.fontmode = "L"
+            draw.text((x, y), self.icontext(), (255,255,255,255), font=weatherFont)
+
         else:
-            icon = self._now["weather"][0]["icon"]
-            url = "http://openweathermap.org/img/wn/%s.png" % (icon)
-            filename = "%s/%s.png" % (image_cache, icon)
+            url = "http://openweathermap.org/img/wn/%s.png" % (self._now["weather"][0]["icon"])
+            filename = "%s/%s.png" % (image_cache, self._now["weather"][0]["icon"])
             if not os.path.isfile(filename):
                 logger.info("Getting %s" % url)
                 urllib.request.urlretrieve(url, filename)
 
             iconImage = Image.open(filename)
-            iconImage = iconImage.crop((4, 4, 46, 46))
-            return iconImage.resize((30, 30), resample=Image.LANCZOS)
+            iconImage = iconImage.crop((4, 4, 46, 46)).resize((30, 30), resample=Image.LANCZOS)
+            iconBox.paste(iconImage, (1, 1), mask=iconImage)
+
+        return iconBox
 
     def hour(self, hour):
         return self._payload["hourly"][hour]
@@ -168,16 +203,8 @@ class Weather:
         canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
         draw = ImageDraw.Draw(canvas)
         
-        if self.night():
-            skyColor = (0, 0, 0)
-        else:
-            skyColor = (128, 128, 255)
-
-        draw.rectangle([(32,0),  (64, 32)], fill=(skyColor + (255 ,)))
-
         for x in range(24):
-            hour = self.hour(x+1)
-            t = time.localtime(hour["dt"])
+            t = time.localtime(self.hour(x)["dt"])
             if t[3] == 0:
                 draw.line([(26, x+4), (28, x+4)], fill=(64, 64, 64))
             if t[3] in [6, 18]:
@@ -185,7 +212,7 @@ class Weather:
             if t[3] == 12:
                 draw.line([(28, x+4), (30, x+4)], fill=(64, 64, 64))
 
-            diff = hour["temp"] - self.hour(x)["temp"]
+            diff = self.hour(x)["temp"] - self._now["temp"]
             if diff > 1.0:
                 draw.point((28, x+4), fill=(128, 64, 32))
             elif diff < -1.0:
@@ -194,7 +221,7 @@ class Weather:
                 draw.point((28, x+4), fill=(32, 32, 32))
 
         iconImage = self.icon()
-        canvas.paste(iconImage, (33, 1), mask=iconImage)
+        canvas.paste(iconImage, (32, 0), mask=iconImage)
 
         tempString = "%.0f°" % (self.temp())
         humidityString = "%.0f%%" % (self.humidity())
@@ -205,7 +232,7 @@ class Weather:
                             (tempString, (1, -2), ttfFont, (192, 192, 128)),
                             (humidityString, (1, 7), ttfFont, (128, 192, 128)),
                             (windString, (1, 17), ttfFontSm, (128, 192, 192)),
-                            (pressureString, (1, 24), ttfFontSm, (128, 128, 128))
+                            (pressureString, (1, 24), ttfFontSm, (128, 128, 128)),
                             ],
                             textColor)
 
