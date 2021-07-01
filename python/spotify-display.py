@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import spotipy
+from random import random
 import logging
 import time
 import sys
@@ -10,168 +11,366 @@ from spotipy.oauth2 import SpotifyOAuth
 from spotipy.cache_handler import CacheFileHandler
 import simplejson
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilter
 import urllib
 import requests
+
+username = "mikewebkist"
 
 basepath = os.path.dirname(sys.argv[0])
 if basepath == "":
     basepath = "."
 
-username = "mikewebkist"
+image_cache = "%s/imagecache" % (basepath)
+
+ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
+ttfFontSm = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 7)
+weatherFont = ImageFont.truetype("%s/weathericons-regular-webfont.ttf" % basepath, 20)
 
 if len(sys.argv) > 1:
     username = sys.argv[1]
 
 logging.basicConfig(filename='/tmp/spotify-matrix.log',level=logging.INFO)
-
 logger = logging.getLogger(__name__)
 
-options = RGBMatrixOptions()
-options.hardware_mapping = "adafruit-hat-pwm"
-options.rows = 32
-options.cols = 64
-options.disable_hardware_pulsing = False
-options.gpio_slowdown = 3
+class Frame:
+    def __init__(self):
+        self.options = RGBMatrixOptions()
+        self.options.brightness = 100
+        self.options.hardware_mapping = "adafruit-hat-pwm"
+        self.options.rows = 32
+        self.options.cols = 64
+        self.options.disable_hardware_pulsing = False
+        self.options.gpio_slowdown = 3
 
-font = graphics.Font()
-font.LoadFont("%s/font.bdf" % (basepath))
+        self.matrix = RGBMatrix(options=self.options)
+        self.offscreen_canvas = self.matrix.CreateFrameCanvas()
+        self.width = self.options.cols
+        self.height = self.options.rows
+    
+    def gamma(value):
+        return round(pow(value / 255.0, 1.8) * 255.0)
 
-cache_handler = CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username))
-image_cache = "%s/imagecache" % (basepath)
+    def swap(self, canvas):
+        canvas = Image.eval(canvas, Frame.gamma)
+        self.offscreen_canvas.SetImage(canvas, 0, 0)
+        self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
-def gamma(value):
-    gamma = 2.8
-    max_in = 255
-    max_out = 255
-    return pow(value / max_in, gamma) * max_out
-
-def getImage(url):
+def rawImage(url):
+    # We're going to save the processed image instead of the raw one.
     m = url.rsplit('/', 1)
-    filename = "%s/%s" % (image_cache, m[-1])
-    if not os.path.isfile(filename):
-        logger.debug("Getting %s" % url)
-        urllib.request.urlretrieve(url, filename)
-
-    image = Image.open(filename)
-    image = ImageEnhance.Contrast(image).enhance(1.5)
-    image = ImageEnhance.Brightness(image).enhance(gamma(150) / 255.0)
-    image = image.resize((32, 32), resample=Image.LANCZOS)
+    image = None
+    processed = "%s/%s.png" % (image_cache, m[-1])
+    if os.path.isfile(processed):
+        image = Image.open(processed)
+    else:
+        logger.info("Getting %s" % url)
+        with urllib.request.urlopen(url) as rawimage:
+            image = Image.open(rawimage)
+            image = image.resize((32, 32), resample=Image.LANCZOS)
+            image.save(processed, "PNG")
 
     return image
 
-textColor = graphics.Color(gamma(192), gamma(192), gamma(192))
+def processedImage(url):
+    image = rawImage(url)
+    image = ImageEnhance.Color(image).enhance(0.5)
+    image = ImageEnhance.Brightness(image).enhance(0.85)
+    return image
+
+def getTextImage(texts, color):
+    txtImg = Image.new('RGBA', (64, 32), (255, 255, 255, 0))
+    draw = ImageDraw.Draw(txtImg)
+    for text, position, *font in texts:
+        if font:
+            lineFont = font[0]
+            lineColor = font[1]
+        else:
+            lineFont = ttfFont
+            lineColor = color
+        (x, y) = position
+        draw.fontmode = "1"
+        draw.text((x - 1, y + 1), text, (0,0,0), font=lineFont)
+        draw.text((x,     y    ), text, lineColor,   font=lineFont)
+    return txtImg
+
+textColor = (192, 192, 192)
+
+def ktof(k):
+    return (k - 273.15) * 1.8 + 32.0
+
+class Weather:
+    api = "https://api.openweathermap.org/data/2.5/onecall?lat=39.9623348&lon=-75.1927043&appid=%s" % (os.environ["OPENWEATHER_API"])
+
+    def __init__(self):
+        self.nextupdate = 0
+        self._update()
+    
+    def icontext(self):
+        # return False
+        with open("%s/font-icon-map.tsv" % basepath, "r") as f:
+            for line in f:
+                num, daypart, ustr = line.rstrip().split("\t")
+                if daypart == "day":
+                    if int(self._now["weather"][0]["id"]) == int(num):
+                        return chr(int(ustr, 16))
+
+    def _update(self):
+        if time.time() < self.nextupdate:
+            return False
+
+        try:
+            r = urllib.request.urlopen(Weather.api)
+        except http.client.RemoteDisconnected as err:
+            logger.error("Problem getting weather")
+            logger.error(err)
+            time.sleep(30)
+            return self.nextupdate - time.time()
+
+        self._payload = simplejson.loads(r.read())
+        self._now = self._payload["current"]
+        if time.localtime()[3] <= 5:      
+            self.nextupdate = time.time() + (60 * 30) # Five minutes
+        else:
+            self.nextupdate = time.time() + (60 * 5) # Five minutes
+        
+    def night(self):
+        if self._now["dt"] > (self._now["sunset"] + 1080) or self._now["dt"] < (self._now["sunrise"] - 1080):
+            return True
+        else:
+            return False
+
+    def icon(self):
+        if self.night():
+            skyColor = (0, 0, 0)
+        else:
+            clouds = self._now["clouds"] / 100.0
+            skyColor = (int(clouds * 64 + 96), int(clouds * 64 + 96), int(255 - clouds * 96))
+
+        iconBox = Image.new('RGBA', (32, 32), skyColor)
+
+        # canvas.paste(iconImage, (33, 1), mask=iconImage)
+        if self.night():
+            phase = ((round(self._payload["daily"][0]["moon_phase"] * 8) + 11))
+            moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase))
+            iconBox.paste(moonImage.resize((30, 30), resample=Image.LANCZOS), (1, 1), mask=moonImage)
+
+        elif self.icontext():
+            draw = ImageDraw.Draw(iconBox)
+            draw.fontmode = "L"
+            w, h = draw.textsize(self.icontext(), font=weatherFont)
+            x = (32 - w) / 2 + 1
+            y = (32 - h) / 2
+
+            # draw.text((x - 1, y + 1), self.icontext(), (0,0,0), font=weatherFont)
+            draw.text((x, y), self.icontext(), (0,0,255), font=weatherFont)
+            iconBox = iconBox.filter(ImageFilter.GaussianBlur(radius=2))
+            draw = ImageDraw.Draw(iconBox)
+            draw.fontmode = "L"
+            draw.text((x, y), self.icontext(), (255,255,255,255), font=weatherFont)
+
+        else:
+            url = "http://openweathermap.org/img/wn/%s.png" % (self._now["weather"][0]["icon"])
+            filename = "%s/%s.png" % (image_cache, self._now["weather"][0]["icon"])
+            if not os.path.isfile(filename):
+                logger.info("Getting %s" % url)
+                urllib.request.urlretrieve(url, filename)
+
+            iconImage = Image.open(filename)
+            iconImage = iconImage.crop((4, 4, 46, 46)).resize((30, 30), resample=Image.LANCZOS)
+            iconBox.paste(iconImage, (1, 1), mask=iconImage)
+
+        return iconBox
+
+    def hour(self, hour):
+        return self._payload["hourly"][hour]
+
+    def temp(self):
+        return ktof(self._payload["current"]["temp"])
+
+    def humidity(self):
+        return self._payload["current"]["humidity"]
+
+    def wind_speed(self):
+        return self._payload["current"]["wind_speed"] * 2.237
+
+    def pressure(self):
+        return self._payload["current"]["pressure"] * 0.0295301
+
+    def image(self):
+        self._update()
+
+        canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+        
+        for x in range(24):
+            t = time.localtime(self.hour(x)["dt"])
+            if t[3] == 0:
+                draw.line([(26, x+4), (28, x+4)], fill=(64, 64, 64))
+            if t[3] in [6, 18]:
+                draw.line([(27, x+4), (29, x+4)], fill=(64, 64, 64))
+            if t[3] == 12:
+                draw.line([(28, x+4), (30, x+4)], fill=(64, 64, 64))
+
+            diff = self.hour(x)["temp"] - self._now["temp"]
+            if diff > 1.0:
+                draw.point((28, x+4), fill=(128, 64, 32))
+            elif diff < -1.0:
+                draw.point((28, x+4), fill=(32, 32, 128))
+            else:
+                draw.point((28, x+4), fill=(32, 32, 32))
+
+        iconImage = self.icon()
+        canvas.paste(iconImage, (32, 0), mask=iconImage)
+
+        tempString = "%.0f°" % (self.temp())
+        humidityString = "%.0f%%" % (self.humidity())
+        windString = "%.0f mph" % (self.wind_speed())
+        pressureString = "%.1f\"" % (self.pressure())
+
+        txtImg = getTextImage([
+                            (tempString, (1, -2), ttfFont, (192, 192, 128)),
+                            (humidityString, (1, 7), ttfFont, (128, 192, 128)),
+                            (windString, (1, 17), ttfFontSm, (128, 192, 192)),
+                            (pressureString, (1, 24), ttfFontSm, (128, 128, 128)),
+                            ],
+                            textColor)
+
+        return Image.alpha_composite(canvas, txtImg).convert('RGB')
+
+class Music:
+    def __init__(self):
+        self._spotify = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=os.environ["SPOTIFY_ID"],
+                                        client_secret=os.environ["SPOTIFY_SECRET"],
+                                        cache_handler=CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username)),
+                                        redirect_uri="http://localhost:8080/callback",
+                                        show_dialog=True,
+                                        open_browser=False,
+                                        scope="user-library-read,user-read-playback-state"))
+        user = self._spotify.current_user()
+        logger.info("Now Playing for %s [%s]" % (user["display_name"], user["id"]))
+        self.nextupdate = 0
+        self._update()
+
+    def timeleft(self):
+        return round((self._nowplaying["item"]["duration_ms"] - self._nowplaying["progress_ms"]) / 1000.0)
+
+    def nowplaying(self):
+        if self._nowplaying and self._nowplaying["is_playing"] and self._nowplaying["item"]:
+            return True
+        else:
+            return False
+
+    def _update(self):
+        if time.time() < self.nextupdate:
+            return self.nextupdate - time.time()
+
+        try:
+            self._nowplaying = self._spotify.current_user_playing_track()
+        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as err:
+            logger.error("Problem getting current_user_playing_track")
+            logger.error(err)
+            time.sleep(10)
+            return self.nextupdate - time.time()
+
+        if not self.nowplaying():
+            if time.localtime()[3] <= 5:
+                self.nextupdate = time.time() + (5 * 60) # check in 5 minutes
+            else:
+                self.nextupdate = time.time() + 30 # check in 30 seconds
+            return False
+        elif self.timeleft() > 30:
+            self.nextupdate = time.time() + 10
+        else:
+            self.nextupdate = time.time() + self.timeleft()
+
+        if self.nowplaying():
+            self.track = self._nowplaying["item"]["name"]
+            self.artist = ", ".join(map(lambda x: x["name"], self._nowplaying["item"]["artists"]))
+            self.album_id = self._nowplaying["item"]["album"]["id"]
+            self.track_id = self._nowplaying["item"]["id"]        
+        return self.nextupdate - time.time()
 
 def main():
-    matrix = RGBMatrix(options=options)
-    offscreen_canvas = matrix.CreateFrameCanvas()
+    frame = Frame()
+    weather = Weather()
+    music = Music()
 
-
-    sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=os.environ["SPOTIFY_ID"],
-                                                   client_secret=os.environ["SPOTIFY_SECRET"],
-                                                   cache_handler=cache_handler,
-                                                   redirect_uri="http://localhost:8080/callback",
-                                                   show_dialog=True,
-                                                   open_browser=False,
-                                                   scope="user-library-read,user-read-playback-state"))
-
-    user = sp.current_user()
-    logger.info("Now Playing for %s [%s]" % (user["display_name"], user["id"]))
-
-    cooldownUntil = time.time() * 1000.0
-    nowPlaying = None
     lastSong = ""
+    lastAlbum = ""
     firstRunThisSong = True
+    firstRunThisAlbum = True
 
     while True:
-
-        if (time.time() * 1000.0) > cooldownUntil:
-            # Try getting the current track.
-            try:
-                nowPlaying = sp.current_user_playing_track()
-                if nowPlaying and nowPlaying["is_playing"] and nowPlaying["item"]:
-                    # For the first 30 seconds of the song, check every 3 seconds.
-                    if nowPlaying["progress_ms"] < (30.0 * 1000):
-                        cooldownUntil = (time.time() + 3) * 1000.0
-                    # At the end of the song, try to time it close.
-                    elif (nowPlaying["item"]["duration_ms"] - nowPlaying["progress_ms"]) < (30.0 * 1000.0):
-                        cooldownUntil = (time.time() * 1000.0) + (nowPlaying["item"]["duration_ms"] - nowPlaying["progress_ms"])
-                    # Otherwise, try every 30 seconds while playing.
-                    else:
-                        cooldownUntil = (time.time() * 1000.0) + (30.0 * 1000.0)
-                else:
-                    cooldownUntil = (time.time() + 30) * 1000.0
-
-            except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as err:
-                logger.error("Problem getting current_user_playing_track")
-                logger.error(err)
-                time.sleep(30)
-                continue
-        else:
-            logger.debug("not checking the track for %0.2f secs" % ((cooldownUntil - time.time() * 1000.0) / 1000.0))
+        music._update()
 
         # We have a playing track.
-        if nowPlaying and nowPlaying["is_playing"] and nowPlaying["item"]:
-            trackName = nowPlaying["item"]["name"]
-            artistName = nowPlaying["item"]["artists"][0]["name"]
-            if lastSong != nowPlaying["item"]["id"]:
-                logger.info(u'%s - %s' % (trackName, artistName))
-                lastSong = nowPlaying["item"]["id"]
-                firstSongThisRun = True
+        if music.nowplaying():
+            nowPlaying = music._nowplaying
+            if lastAlbum != music.album_id:
+                lastAlbum = music.album_id
+                firstRunThisAlbum = True
             else:
-                firstSongThisRun = False
+                firstRunThisAlbum = False
 
-            # Art looks slightly better with more contrast and a litte darker
-            image = getImage(nowPlaying["item"]["album"]["images"][1]["url"])
+            if lastSong != music.track_id:
+                logger.info(u'%s - %s' % (music.track, music.artist))
+                lastSong = music.track_id
+                firstRunThisSong = True
+            else:
+                firstRunThisSong = False
 
-            # Length of the longest line of text, in pixels.
-            length = max(graphics.DrawText(offscreen_canvas, font, 0, 20, textColor, trackName),
-                         graphics.DrawText(offscreen_canvas, font, 0, 30, textColor, artistName))
+            try:
+                image = processedImage(nowPlaying["item"]["album"]["images"][-1]["url"])
+            except:
+                image = processedImage(sp.artist(nowPlaying["item"]["artists"][0]["id"])["images"][0]["url"])
 
-            if firstSongThisRun:
-                offscreen_canvas.Clear()
-                for x in range(255):
-                    imageDim = ImageEnhance.Brightness(image).enhance(gamma(x) / 255.0)
-                    offscreen_canvas.SetImage(imageDim.convert('RGB'), 32, 0)
-                    offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
+            if firstRunThisAlbum:
+                canvas = Image.new('RGB', (64, 32), (0, 0, 0))
+                for x in range(127):
+                    imageDim = ImageEnhance.Brightness(image).enhance(x * 2 / 255.0)
+                    canvas.paste(imageDim, (32, 0))
+                    frame.swap(canvas)
                 time.sleep(0.5)
 
+            # Length of the longest line of text, in pixels.
+            length = max(ttfFont.getsize(music.track)[0], ttfFont.getsize(music.artist)[0])
+
             # If either line of text is longer than the display, scroll
-            if length > options.cols:
-                timing = 0.025
+            if length >= frame.width:
+                for x in range(length + frame.width + 10):
+                    canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
+                    canvas.paste(image, (32, 0))
+                    txtImg = getTextImage([
+                            (music.track, (frame.width - x, 10)),
+                            (music.artist, (frame.width - x, 20))
+                        ], textColor)
 
-                for x in range(length + options.cols):
-                    offscreen_canvas.Clear()
-                    offscreen_canvas.SetImage(image.convert('RGB'), 32, 0)
 
-                    graphics.DrawText(offscreen_canvas, font, (options.cols - x), 20, textColor, trackName)
-                    graphics.DrawText(offscreen_canvas, font, (options.cols - x), 30, textColor, artistName)
+                    frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
+                    time.sleep(0.025)
 
-                    offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
-                    time.sleep(timing)
-
-                time.sleep(1.5)
+                time.sleep(1.25)
 
             # If all the text fits, don't scroll.
             else:
-                offscreen_canvas.Clear()
-                offscreen_canvas.SetImage(image.convert('RGB'), 32, 0)
+                if firstRunThisSong:
+                    for x in range(127):
+                        # Add an alpha channel to the color for fading in
+                        textColorFade = textColor + (x * 2,)
+                        canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
+                        canvas.paste(image, (32, 0))
 
-                if firstSongThisRun:
-                    for x in range(192):
-                        textColorFade = graphics.Color(gamma(x), gamma(x), gamma(x))
-                        graphics.DrawText(offscreen_canvas, font, 0, 20, textColorFade, trackName)
-                        graphics.DrawText(offscreen_canvas, font, 0, 30, textColorFade, artistName)
-                        offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
+                        txtImg = getTextImage([(music.track, (0, 10)), (music.artist, (0, 20))], textColorFade)
 
-                graphics.DrawText(offscreen_canvas, font, 0, 20, textColor, trackName)
-                graphics.DrawText(offscreen_canvas, font, 0, 30, textColor, artistName)
+                        frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
+                canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
+                canvas.paste(image, (32, 0))
 
-                offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
+                txtImg = getTextImage([(music.track, (0, 10)), (music.artist, (0, 20))], textColor)
 
+                frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
                 time.sleep(2.0)
-
-            # time.sleep(ms_pause / 1000.0)
 
         # Nothing is playing
         else:
@@ -179,9 +378,8 @@ def main():
                 logger.info("Nothing playing...")
                 lastSong = "nothing playing"
 
-            offscreen_canvas.Clear()
-            offscreen_canvas = matrix.SwapOnVSync(offscreen_canvas)
-            time.sleep(2.0)
-
+            weatherImage = weather.image()
+            frame.swap(weatherImage.convert('RGB'))
+            time.sleep(10)
 
 main()
