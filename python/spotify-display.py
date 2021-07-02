@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import configparser
 import spotipy
 from random import random
 import logging
@@ -15,20 +16,23 @@ from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilt
 import urllib
 import requests
 
-username = "mikewebkist"
-
+config = configparser.ConfigParser()
 basepath = os.path.dirname(sys.argv[0])
 if basepath == "":
     basepath = "."
 
+if len(sys.argv) > 1:
+    configfile = sys.argv[1]
+else:
+    configfile = "%s/local.config" % basepath
+
+config.read(configfile)
+username = config["spotify"]["username"]
 image_cache = "%s/imagecache" % (basepath)
 
 ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
 ttfFontSm = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 7)
 weatherFont = ImageFont.truetype("%s/weathericons-regular-webfont.ttf" % basepath, 20)
-
-if len(sys.argv) > 1:
-    username = sys.argv[1]
 
 logging.basicConfig(filename='/tmp/spotify-matrix.log',level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,10 +40,10 @@ logger = logging.getLogger(__name__)
 class Frame:
     def __init__(self):
         self.options = RGBMatrixOptions()
-        self.options.brightness = 75
+        self.options.brightness = int(config["matrix"]["brightness"])
         self.options.hardware_mapping = "adafruit-hat-pwm"
-        self.options.rows = 32
-        self.options.cols = 64
+        self.options.rows = int(config["matrix"]["height"])
+        self.options.cols = int(config["matrix"]["width"])
         self.options.disable_hardware_pulsing = False
         self.options.gpio_slowdown = 3
 
@@ -100,7 +104,7 @@ def ktof(k):
     return (k - 273.15) * 1.8 + 32.0
 
 class Weather:
-    api = "https://api.openweathermap.org/data/2.5/onecall?lat=39.9623348&lon=-75.1927043&appid=%s" % (os.environ["OPENWEATHER_API"])
+    api = "https://api.openweathermap.org/data/2.5/onecall?lat=39.9623348&lon=-75.1927043&appid=%s" % (config["openweathermap"]["api_key"])
 
     def __init__(self):
         self.nextupdate = 0
@@ -240,8 +244,8 @@ class Weather:
 
 class Music:
     def __init__(self):
-        self._spotify = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=os.environ["SPOTIFY_ID"],
-                                        client_secret=os.environ["SPOTIFY_SECRET"],
+        self._spotify = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=config["spotify"]["spotify_id"],
+                                        client_secret=config["spotify"]["spotify_secret"],
                                         cache_handler=CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username)),
                                         redirect_uri="http://localhost:8080/callback",
                                         show_dialog=True,
