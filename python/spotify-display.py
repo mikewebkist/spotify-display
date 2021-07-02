@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 class Frame:
     def __init__(self):
         self.options = RGBMatrixOptions()
-        self.options.brightness = 100
+        self.options.brightness = 50
         self.options.hardware_mapping = "adafruit-hat-pwm"
         self.options.rows = 32
         self.options.cols = 64
@@ -149,11 +149,11 @@ class Weather:
 
         iconBox = Image.new('RGBA', (32, 32), skyColor)
 
-        # canvas.paste(iconImage, (33, 1), mask=iconImage)
         if self.night():
             phase = ((round(self._payload["daily"][0]["moon_phase"] * 8) + 11))
-            moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase))
-            iconBox.paste(moonImage.resize((30, 30), resample=Image.LANCZOS), (1, 1), mask=moonImage)
+            moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase)).resize((30,30), resample=Image.LANCZOS)
+            moonDim = ImageEnhance.Brightness(moonImage).enhance(0.75)
+            iconBox.paste(moonDim, (1, 1))
 
         elif self.icontext():
             draw = ImageDraw.Draw(iconBox)
@@ -163,8 +163,8 @@ class Weather:
             y = (32 - h) / 2
 
             # draw.text((x - 1, y + 1), self.icontext(), (0,0,0), font=weatherFont)
-            draw.text((x, y), self.icontext(), (0,0,255), font=weatherFont)
-            iconBox = iconBox.filter(ImageFilter.GaussianBlur(radius=2))
+            # draw.text((x, y), self.icontext(), (0,0,255), font=weatherFont)
+            # iconBox = iconBox.filter(ImageFilter.GaussianBlur(radius=2))
             draw = ImageDraw.Draw(iconBox)
             draw.fontmode = "L"
             draw.text((x, y), self.icontext(), (255,255,255,255), font=weatherFont)
