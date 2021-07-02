@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 class Frame:
     def __init__(self):
         self.options = RGBMatrixOptions()
-        self.options.brightness = 50
+        self.options.brightness = 75
         self.options.hardware_mapping = "adafruit-hat-pwm"
         self.options.rows = 32
         self.options.cols = 64
@@ -162,9 +162,9 @@ class Weather:
             x = (32 - w) / 2 + 1
             y = (32 - h) / 2
 
-            # draw.text((x - 1, y + 1), self.icontext(), (0,0,0), font=weatherFont)
-            # draw.text((x, y), self.icontext(), (0,0,255), font=weatherFont)
-            # iconBox = iconBox.filter(ImageFilter.GaussianBlur(radius=2))
+            draw.text((x - 1, y + 1), self.icontext(), (0,0,0), font=weatherFont)
+            draw.text((x, y), self.icontext(), (0,0,255), font=weatherFont)
+            iconBox = iconBox.filter(ImageFilter.GaussianBlur(radius=2))
             draw = ImageDraw.Draw(iconBox)
             draw.fontmode = "L"
             draw.text((x, y), self.icontext(), (255,255,255,255), font=weatherFont)
