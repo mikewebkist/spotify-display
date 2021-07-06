@@ -7,6 +7,7 @@ import logging
 import time
 import sys
 import os
+from io import BytesIO
 import os.path
 from spotipy.oauth2 import SpotifyOAuth
 from spotipy.cache_handler import CacheFileHandler
@@ -29,6 +30,11 @@ else:
 config.read(configfile)
 username = config["spotify"]["username"]
 image_cache = "%s/imagecache" % (basepath)
+
+def getFont(url, size):
+    r = urllib.request.urlopen(url)
+    font = ImageFont.truetype(BytesIO(r.read()), size)
+    return font
 
 ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
 ttfFontSm = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 7)
@@ -111,7 +117,7 @@ class Weather:
         self._update()
     
     def icontext(self):
-        # return False
+        return False
         with open("%s/font-icon-map.tsv" % basepath, "r") as f:
             for line in f:
                 num, daypart, ustr = line.rstrip().split("\t")
@@ -146,10 +152,10 @@ class Weather:
 
     def icon(self):
         if self.night():
-            skyColor = (0, 0, 0)
+            skyColor = (32, 32, 32)
         else:
             clouds = self._now["clouds"] / 100.0
-            skyColor = (int(clouds * 64 + 96), int(clouds * 64 + 96), int(255 - clouds * 96))
+            skyColor = (int(255 - clouds * 64), int(255 - clouds * 64), int(clouds * 64 + 128))
 
         iconBox = Image.new('RGBA', (32, 32), skyColor)
 
@@ -166,12 +172,9 @@ class Weather:
             x = (32 - w) / 2 + 1
             y = (32 - h) / 2
 
-            draw.text((x - 1, y + 1), self.icontext(), (0,0,0), font=weatherFont)
-            draw.text((x, y), self.icontext(), (0,0,255), font=weatherFont)
-            iconBox = iconBox.filter(ImageFilter.GaussianBlur(radius=2))
             draw = ImageDraw.Draw(iconBox)
             draw.fontmode = "L"
-            draw.text((x, y), self.icontext(), (255,255,255,255), font=weatherFont)
+            draw.text((x, y), self.icontext(), skyColor, font=weatherFont)
 
         else:
             url = "http://openweathermap.org/img/wn/%s.png" % (self._now["weather"][0]["icon"])
@@ -208,7 +211,7 @@ class Weather:
         draw = ImageDraw.Draw(canvas)
         
         for x in range(24):
-            t = time.localtime(self.hour(x)["dt"])
+            t = time.localtime(self.hour(x+1)["dt"])
             if t[3] == 0:
                 draw.line([(26, x+4), (28, x+4)], fill=(64, 64, 64))
             if t[3] in [6, 18]:
@@ -216,13 +219,13 @@ class Weather:
             if t[3] == 12:
                 draw.line([(28, x+4), (30, x+4)], fill=(64, 64, 64))
 
-            diff = self.hour(x)["temp"] - self._now["temp"]
+            diff = self.hour(x+1)["temp"] - self.hour(x)["temp"]
             if diff > 1.0:
-                draw.point((28, x+4), fill=(128, 64, 32))
+                draw.point((28, x+4), fill=(192, 128, 32))
             elif diff < -1.0:
-                draw.point((28, x+4), fill=(32, 32, 128))
+                draw.point((28, x+4), fill=(64, 64, 255))
             else:
-                draw.point((28, x+4), fill=(32, 32, 32))
+                draw.point((28, x+4), fill=(64, 64, 64))
 
         iconImage = self.icon()
         canvas.paste(iconImage, (32, 0), mask=iconImage)
