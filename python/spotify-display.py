@@ -152,7 +152,7 @@ class Weather:
 
     def icon(self):
         if self.night():
-            skyColor = (32, 32, 32)
+            skyColor = (0, 0, 0)
         else:
             clouds = self._now["clouds"] / 100.0
             skyColor = (int(255 - clouds * 64), int(255 - clouds * 64), int(clouds * 64 + 128))
@@ -161,9 +161,9 @@ class Weather:
 
         if self.night():
             phase = ((round(self._payload["daily"][0]["moon_phase"] * 8) + 11))
-            moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase)).resize((30,30), resample=Image.LANCZOS)
+            moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase)).resize((24,24), resample=Image.LANCZOS)
             moonDim = ImageEnhance.Brightness(moonImage).enhance(0.75)
-            iconBox.paste(moonDim, (1, 1))
+            iconBox.paste(moonDim, (4, 4))
 
         elif self.icontext():
             draw = ImageDraw.Draw(iconBox)
@@ -237,7 +237,7 @@ class Weather:
 
         txtImg = getTextImage([
                             (tempString, (1, -2), ttfFont, (192, 192, 128)),
-                            (humidityString, (1, 7), ttfFont, (128, 192, 128)),
+                            (humidityString, (1, 10), ttfFontSm, (128, 192, 128)),
                             (windString, (1, 17), ttfFontSm, (128, 192, 192)),
                             (pressureString, (1, 24), ttfFontSm, (128, 128, 128)),
                             ],
