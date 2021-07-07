@@ -31,13 +31,17 @@ config.read(configfile)
 username = config["spotify"]["username"]
 image_cache = "%s/imagecache" % (basepath)
 
-def getFont(url, size):
-    r = urllib.request.urlopen(url)
-    font = ImageFont.truetype(BytesIO(r.read()), size)
-    return font
+def getFont(fontconfig):
+    path, size = fontconfig.split(",")
+    return ImageFont.truetype(path, int(size))
 
-ttfFont = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 10)
-ttfFontSm = ImageFont.truetype("/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf", 7)
+    # r = urllib.request.urlopen(url)
+    # return ImageFont.truetype(BytesIO(r.read()), size)
+
+ttfFont = getFont(config["fonts"]["regular"])
+ttfFontSm = getFont(config["fonts"]["small"])
+ttfFontLg = getFont(config["fonts"]["large"])
+
 weatherFont = ImageFont.truetype("%s/weathericons-regular-webfont.ttf" % basepath, 20)
 
 logging.basicConfig(filename='/tmp/spotify-matrix.log',level=logging.INFO)
@@ -236,7 +240,7 @@ class Weather:
         pressureString = "%.1f\"" % (self.pressure())
 
         txtImg = getTextImage([
-                            (tempString, (1, -2), ttfFont, (192, 192, 128)),
+                            (tempString, (1, -2), ttfFontLg, (192, 192, 128)),
                             (humidityString, (1, 10), ttfFontSm, (128, 192, 128)),
                             (windString, (1, 17), ttfFontSm, (128, 192, 192)),
                             (pressureString, (1, 24), ttfFontSm, (128, 128, 128)),
