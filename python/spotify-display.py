@@ -143,10 +143,12 @@ class Weather:
 
         self._payload = simplejson.loads(r.read())
         self._now = self._payload["current"]
+
+        # Update every 30 minutes overnight to save API calls
         if time.localtime()[3] <= 5:      
-            self.nextupdate = time.time() + (60 * 30) # Five minutes
+            self.nextupdate = time.time() + (60 * 30)
         else:
-            self.nextupdate = time.time() + (60 * 5) # Five minutes
+            self.nextupdate = time.time() + (60 * 5)
         
     def night(self):
         if self._now["dt"] > (self._now["sunset"] + 1080) or self._now["dt"] < (self._now["sunrise"] - 1080):
@@ -158,8 +160,8 @@ class Weather:
         if self.night():
             skyColor = (0, 0, 0)
         else:
-            clouds = self._now["clouds"] / 100.0
-            skyColor = (int(255 - clouds * 64), int(255 - clouds * 64), int(clouds * 64 + 128))
+            clouds = self.clouds() / 100.0
+            skyColor = (128 + int(clouds * 64), 128 + int(clouds * 64), 255 - int(clouds * 64))
 
         iconBox = Image.new('RGBA', (32, 32), skyColor)
 
@@ -202,8 +204,20 @@ class Weather:
     def humidity(self):
         return self._payload["current"]["humidity"]
 
+    def clouds(self):
+        return self._now["clouds"]
+
     def wind_speed(self):
         return self._payload["current"]["wind_speed"] * 2.237
+
+    # The screen is actually too low-res for this to look good
+    def wind_dir(self):
+        d = self._now["wind_deg"] - 45
+        if d < 0:
+            d = d + 360.0
+
+        wind_dirs = ["N", "E", "S", "W"]
+        return wind_dirs[int(d / 90)]
 
     def pressure(self):
         return self._payload["current"]["pressure"] * 0.0295301
@@ -234,15 +248,23 @@ class Weather:
         iconImage = self.icon()
         canvas.paste(iconImage, (32, 0), mask=iconImage)
 
+        # A little indicator of rain in the next hour. Each pixel represents two minutes.
+        for m in range(30):
+            rain = self._payload["minutely"][2 * m]["precipitation"] + self._payload["minutely"][2 * m + 1]["precipitation"]
+            if rain > 0:
+                draw.point((m + 1, 1), fill=(128,128,255))
+            else:
+                draw.point((m + 1, 1), fill=(32,32,32))
+
         tempString = "%.0f°" % (self.temp())
         humidityString = "%.0f%%" % (self.humidity())
         windString = "%.0f mph" % (self.wind_speed())
         pressureString = "%.1f\"" % (self.pressure())
 
         txtImg = getTextImage([
-                            (tempString, (1, -2), ttfFontLg, (192, 192, 128)),
-                            (humidityString, (1, 10), ttfFontSm, (128, 192, 128)),
-                            (windString, (1, 17), ttfFontSm, (128, 192, 192)),
+                            (tempString, (1, 0), ttfFontLg, (192, 192, 128)),
+                            (humidityString, (1, 12), ttfFontSm, (128, 192, 128)),
+                            (windString, (1, 18), ttfFontSm, (128, 192, 192)),
                             (pressureString, (1, 24), ttfFontSm, (128, 128, 128)),
                             ],
                             textColor)
