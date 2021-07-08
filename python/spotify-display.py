@@ -13,7 +13,7 @@ from spotipy.oauth2 import SpotifyOAuth
 from spotipy.cache_handler import CacheFileHandler
 import simplejson
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
-from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilter
+from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilter, ImageOps
 import urllib
 import requests
 
@@ -166,10 +166,10 @@ class Weather:
         iconBox = Image.new('RGBA', (32, 32), skyColor)
 
         if self.night():
-            phase = ((round(self._payload["daily"][0]["moon_phase"] * 8) + 11))
+            phase = (((round(self._payload["daily"][0]["moon_phase"] * 8) % 8)  + 11))
             moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase)).resize((24,24), resample=Image.LANCZOS)
-            moonDim = ImageEnhance.Brightness(moonImage).enhance(0.75)
-            iconBox.paste(moonDim, (4, 4))
+            moonDim = ImageOps.expand(ImageEnhance.Brightness(moonImage).enhance(0.75), border=4, fill=(0,0,0,0))
+            iconBox.alpha_composite(moonDim)
 
         elif self.icontext():
             draw = ImageDraw.Draw(iconBox)
@@ -190,8 +190,8 @@ class Weather:
                 urllib.request.urlretrieve(url, filename)
 
             iconImage = Image.open(filename)
-            iconImage = iconImage.crop((4, 4, 46, 46)).resize((30, 30), resample=Image.LANCZOS)
-            iconBox.paste(iconImage, (1, 1), mask=iconImage)
+            iconImage = iconImage.crop((3, 3, 45, 45)).resize((30, 30), resample=Image.LANCZOS)
+            iconBox.alpha_composite(iconImage)
 
         return iconBox
 
@@ -246,7 +246,9 @@ class Weather:
                 draw.point((28, x+4), fill=(64, 64, 64))
 
         iconImage = self.icon()
-        canvas.paste(iconImage, (32, 0), mask=iconImage)
+        # We're replaceing the entire right side of
+        # the image, so no need for alpha blending
+        canvas.paste(iconImage, (32, 0))
 
         # A little indicator of rain in the next hour. Each pixel represents two minutes.
         for m in range(30):
