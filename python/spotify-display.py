@@ -167,7 +167,7 @@ class Weather:
 
         if self.night():
             phase = (((round(self._payload["daily"][0]["moon_phase"] * 8) % 8)  + 11))
-            moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase)).resize((24,24), resample=Image.LANCZOS)
+            moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase)).resize((24,24))
             moonDim = ImageOps.expand(ImageEnhance.Brightness(moonImage).enhance(0.75), border=4, fill=(0,0,0,0))
             iconBox.alpha_composite(moonDim)
 
@@ -190,7 +190,7 @@ class Weather:
                 urllib.request.urlretrieve(url, filename)
 
             iconImage = Image.open(filename)
-            iconImage = iconImage.crop((3, 3, 45, 45)).resize((30, 30), resample=Image.LANCZOS)
+            iconImage = iconImage.crop((3, 3, 45, 45)).resize((30, 30))
             iconBox.alpha_composite(iconImage)
 
         return iconBox
