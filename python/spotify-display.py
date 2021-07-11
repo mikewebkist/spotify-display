@@ -70,28 +70,6 @@ class Frame:
         self.offscreen_canvas.SetImage(canvas, 0, 0)
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
-def rawImage(url):
-    # We're going to save the processed image instead of the raw one.
-    m = url.rsplit('/', 1)
-    image = None
-    processed = "%s/%s.png" % (image_cache, m[-1])
-    if os.path.isfile(processed):
-        image = Image.open(processed)
-    else:
-        logger.info("Getting %s" % url)
-        with urllib.request.urlopen(url) as rawimage:
-            image = Image.open(rawimage)
-            image = image.resize((32, 32), resample=Image.LANCZOS)
-            image.save(processed, "PNG")
-
-    return image
-
-def processedImage(url):
-    image = rawImage(url)
-    image = ImageEnhance.Color(image).enhance(0.5)
-    image = ImageEnhance.Brightness(image).enhance(0.85)
-    return image
-
 def getTextImage(texts, color):
     txtImg = Image.new('RGBA', (64, 32), (255, 255, 255, 0))
     draw = ImageDraw.Draw(txtImg)
@@ -161,8 +139,8 @@ class Weather:
             skyColor = (0, 0, 0)
         else:
             clouds = self.clouds() / 100.0
-            skyColor = (0, 0, 0)
-            # skyColor = (128 + int(clouds * 64), 128 + int(clouds * 64), 255 - int(clouds * 64))
+            # skyColor = (0, 0, 0)
+            skyColor = (128 + int(clouds * 64), 128 + int(clouds * 64), 255 - int(clouds * 64))
 
         iconBox = Image.new('RGBA', (32, 32), skyColor)
 
@@ -325,6 +303,29 @@ class Music:
             self.track_id = self._nowplaying["item"]["id"]        
         return self.nextupdate - time.time()
 
+    def album_image(self):
+        url = self._nowplaying["item"]["album"]["images"][-1]["url"]
+        # We're going to save the processed image instead of the raw one.
+        m = url.rsplit('/', 1)
+        processed = "%s/%s.png" % (image_cache, m[-1])
+        if os.path.isfile(processed):
+            image = Image.open(processed)
+        else:
+            logger.info("Getting %s" % url)
+            with urllib.request.urlopen(url) as rawimage:
+                image = Image.open(rawimage)
+                image = image.resize((32, 32), resample=Image.LANCZOS)
+                image.save(processed, "PNG")
+
+        image = ImageEnhance.Color(image).enhance(0.5)
+        image = ImageEnhance.Brightness(image).enhance(0.85)
+        return image
+
+    def canvas(self):
+        canvas = Image.new('RGBA', (64, 32), (0,0,0))
+        canvas.paste(self.album_image(), (32, 0))
+        return canvas
+
 def main():
     frame = Frame()
     weather = Weather()
@@ -354,18 +355,12 @@ def main():
             else:
                 firstRunThisSong = False
 
-            try:
-                image = processedImage(nowPlaying["item"]["album"]["images"][-1]["url"])
-            except:
-                image = processedImage(sp.artist(nowPlaying["item"]["artists"][0]["id"])["images"][0]["url"])
-
+            canvas = music.canvas()
             if firstRunThisAlbum:
-                canvas = Image.new('RGB', (64, 32), (0, 0, 0))
                 for x in range(127):
-                    imageDim = ImageEnhance.Brightness(image).enhance(x * 2 / 255.0)
-                    canvas.paste(imageDim, (32, 0))
-                    frame.swap(canvas)
+                    frame.swap(ImageEnhance.Brightness(canvas).enhance(x * 2 / 255.0).convert('RGB'))
                 time.sleep(0.5)
+
 
             # Length of the longest line of text, in pixels.
             length = max(ttfFont.getsize(music.track)[0], ttfFont.getsize(music.artist)[0])
@@ -373,13 +368,10 @@ def main():
             # If either line of text is longer than the display, scroll
             if length >= frame.width:
                 for x in range(length + frame.width + 10):
-                    canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
-                    canvas.paste(image, (32, 0))
                     txtImg = getTextImage([
                             (music.track, (frame.width - x, 10)),
                             (music.artist, (frame.width - x, 20))
                         ], textColor)
-
 
                     frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
                     time.sleep(0.025)
@@ -392,17 +384,11 @@ def main():
                     for x in range(127):
                         # Add an alpha channel to the color for fading in
                         textColorFade = textColor + (x * 2,)
-                        canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
-                        canvas.paste(image, (32, 0))
-
                         txtImg = getTextImage([(music.track, (0, 10)), (music.artist, (0, 20))], textColorFade)
 
                         frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
-                canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
-                canvas.paste(image, (32, 0))
 
                 txtImg = getTextImage([(music.track, (0, 10)), (music.artist, (0, 20))], textColor)
-
                 frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
                 time.sleep(2.0)
 
