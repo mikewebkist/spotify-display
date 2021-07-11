@@ -251,7 +251,7 @@ class Weather:
         return Image.alpha_composite(canvas, txtImg).convert('RGB')
 
 class Music:
-    def __init__(self):
+    def __init__(self, weather=None):
         self._spotify = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=config["spotify"]["spotify_id"],
                                         client_secret=config["spotify"]["spotify_secret"],
                                         cache_handler=CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username)),
@@ -260,6 +260,7 @@ class Music:
                                         open_browser=False,
                                         scope="user-library-read,user-read-playback-state"))
         user = self._spotify.current_user()
+        self.weather = weather
         logger.info("Now Playing for %s [%s]" % (user["display_name"], user["id"]))
         self.nextupdate = 0
         self._update()
@@ -324,12 +325,13 @@ class Music:
     def canvas(self):
         canvas = Image.new('RGBA', (64, 32), (0,0,0))
         canvas.paste(self.album_image(), (32, 0))
+        canvas.alpha_composite(getTextImage([(self.weather.temp(), (0, -2), ttfFont,  (64, 64, 64)),], textColor))
         return canvas
 
 def main():
     frame = Frame()
     weather = Weather()
-    music = Music()
+    music = Music(weather=weather)
 
     lastSong = ""
     lastAlbum = ""
