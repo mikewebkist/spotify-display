@@ -340,6 +340,7 @@ def main():
 
     while True:
         music._update()
+        weather._update()
 
         # We have a playing track.
         if music.nowplaying():
