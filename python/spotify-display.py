@@ -161,7 +161,8 @@ class Weather:
             skyColor = (0, 0, 0)
         else:
             clouds = self.clouds() / 100.0
-            skyColor = (128 + int(clouds * 64), 128 + int(clouds * 64), 255 - int(clouds * 64))
+            skyColor = (0, 0, 0)
+            # skyColor = (128 + int(clouds * 64), 128 + int(clouds * 64), 255 - int(clouds * 64))
 
         iconBox = Image.new('RGBA', (32, 32), skyColor)
 
@@ -199,16 +200,16 @@ class Weather:
         return self._payload["hourly"][hour]
 
     def temp(self):
-        return ktof(self._payload["current"]["temp"])
+        return "%.0f°" % ktof(self._payload["current"]["temp"])
 
     def humidity(self):
-        return self._payload["current"]["humidity"]
+        return "%.0f%%" % self._payload["current"]["humidity"]
 
     def clouds(self):
         return self._now["clouds"]
 
     def wind_speed(self):
-        return self._payload["current"]["wind_speed"] * 2.237
+        return "%.0f mph" % (self._payload["current"]["wind_speed"] * 2.237)
 
     # The screen is actually too low-res for this to look good
     def wind_dir(self):
@@ -220,7 +221,7 @@ class Weather:
         return wind_dirs[int(d / 90)]
 
     def pressure(self):
-        return self._payload["current"]["pressure"] * 0.0295301
+        return "%.1f\"" % (self._payload["current"]["pressure"] * 0.0295301)
 
     def image(self):
         self._update()
@@ -252,22 +253,20 @@ class Weather:
 
         # A little indicator of rain in the next hour. Each pixel represents two minutes.
         for m in range(30):
-            rain = self._payload["minutely"][2 * m]["precipitation"] + self._payload["minutely"][2 * m + 1]["precipitation"]
-            if rain > 0:
-                draw.point((m + 1, 1), fill=(128,128,255))
-            else:
-                draw.point((m + 1, 1), fill=(32,32,32))
-
-        tempString = "%.0f°" % (self.temp())
-        humidityString = "%.0f%%" % (self.humidity())
-        windString = "%.0f mph" % (self.wind_speed())
-        pressureString = "%.1f\"" % (self.pressure())
+            try: # one time the payload didn't include minutely data...
+                rain = self._payload["minutely"][2 * m]["precipitation"] + self._payload["minutely"][2 * m + 1]["precipitation"]
+                if rain > 0:
+                    draw.point((m + 1, 1), fill=(128,128,255))
+                else:
+                    draw.point((m + 1, 1), fill=(32,32,32))
+            except KeyError:
+                draw.point((m + 1, 1), fill=(128, 0, 0))
 
         txtImg = getTextImage([
-                            (tempString, (1, 0), ttfFontLg, (192, 192, 128)),
-                            (humidityString, (1, 12), ttfFontSm, (128, 192, 128)),
-                            (windString, (1, 18), ttfFontSm, (128, 192, 192)),
-                            (pressureString, (1, 24), ttfFontSm, (128, 128, 128)),
+                            (self.temp(),       (1, 0), ttfFontLg,  (192, 192, 128)),
+                            (self.humidity(),   (1, 12), ttfFontSm, (128, 192, 128)),
+                            (self.wind_speed(), (1, 18), ttfFontSm, (128, 192, 192)),
+                            (self.pressure(),   (1, 24), ttfFontSm, (128, 128, 128)),
                             ],
                             textColor)
 
@@ -302,7 +301,7 @@ class Music:
 
         try:
             self._nowplaying = self._spotify.current_user_playing_track()
-        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as err:
+        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError, spotipy.oauth2.SpotifyOauthError) as err:
             logger.error("Problem getting current_user_playing_track")
             logger.error(err)
             time.sleep(10)
