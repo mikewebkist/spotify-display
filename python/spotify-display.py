@@ -30,6 +30,8 @@ else:
 config.read(configfile)
 username = config["spotify"]["username"]
 image_cache = "%s/imagecache" % (basepath)
+weather = False
+music = False
 
 def getFont(fontconfig):
     path, size = fontconfig.split(",")
@@ -180,6 +182,16 @@ class Weather:
     def temp(self):
         return "%.0f°" % ktof(self._payload["current"]["temp"])
 
+    # If the "feels_like" temp is over 80 it's probably steamy outside
+    def steamy(self):
+        return ktof(self._payload["current"]["feels_like"]) > 90
+
+    def feelslike(self):
+        if self.steamy():
+            return "~%.0f°" % ktof(self._payload["current"]["feels_like"])
+        else:
+            return self.temp()
+
     def humidity(self):
         return "%.0f%%" % self._payload["current"]["humidity"]
 
@@ -251,7 +263,7 @@ class Weather:
         return Image.alpha_composite(canvas, txtImg).convert('RGB')
 
 class Music:
-    def __init__(self, weather=None):
+    def __init__(self):
         self._spotify = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=config["spotify"]["spotify_id"],
                                         client_secret=config["spotify"]["spotify_secret"],
                                         cache_handler=CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username)),
@@ -260,9 +272,11 @@ class Music:
                                         open_browser=False,
                                         scope="user-library-read,user-read-playback-state"))
         user = self._spotify.current_user()
-        self.weather = weather
         logger.info("Now Playing for %s [%s]" % (user["display_name"], user["id"]))
         self.nextupdate = 0
+        self.lastAlbum = ""
+        self.lastSong = ""
+
         self._update()
 
     def timeleft(self):
@@ -304,6 +318,20 @@ class Music:
             self.track_id = self._nowplaying["item"]["id"]        
         return self.nextupdate - time.time()
 
+    def new_album(self):
+        if self.lastAlbum == self.album_id:
+            return False
+        else:
+            self.lastAlbum = self.album_id
+            return True
+
+    def new_song(self):
+        if self.lastSong == self.track_id:
+            return False
+        else:
+            self.lastSong = self.track_id
+            return True
+
     def album_image(self):
         url = self._nowplaying["item"]["album"]["images"][-1]["url"]
         # We're going to save the processed image instead of the raw one.
@@ -325,18 +353,18 @@ class Music:
     def canvas(self):
         canvas = Image.new('RGBA', (64, 32), (0,0,0))
         canvas.paste(self.album_image(), (32, 0))
-        canvas.alpha_composite(getTextImage([(self.weather.temp(), (0, -2), ttfFont,  (64, 64, 64)),], textColor))
+        if weather.steamy():
+            canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 128, 64)),], textColor))
+        else:
+            canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 128, 128)),], textColor))
         return canvas
 
 def main():
+    global weather
+
     frame = Frame()
     weather = Weather()
-    music = Music(weather=weather)
-
-    lastSong = ""
-    lastAlbum = ""
-    firstRunThisSong = True
-    firstRunThisAlbum = True
+    music = Music()
 
     while True:
         music._update()
@@ -344,22 +372,9 @@ def main():
 
         # We have a playing track.
         if music.nowplaying():
-            nowPlaying = music._nowplaying
-            if lastAlbum != music.album_id:
-                lastAlbum = music.album_id
-                firstRunThisAlbum = True
-            else:
-                firstRunThisAlbum = False
-
-            if lastSong != music.track_id:
-                logger.info(u'%s - %s' % (music.track, music.artist))
-                lastSong = music.track_id
-                firstRunThisSong = True
-            else:
-                firstRunThisSong = False
-
             canvas = music.canvas()
-            if firstRunThisAlbum:
+
+            if music.new_album():
                 for x in range(127):
                     frame.swap(ImageEnhance.Brightness(canvas).enhance(x * 2 / 255.0).convert('RGB'))
                 time.sleep(0.5)
@@ -383,7 +398,7 @@ def main():
 
             # If all the text fits, don't scroll.
             else:
-                if firstRunThisSong:
+                if music.new_song():
                     for x in range(127):
                         # Add an alpha channel to the color for fading in
                         textColorFade = textColor + (x * 2,)
@@ -397,12 +412,7 @@ def main():
 
         # Nothing is playing
         else:
-            if lastSong != "nothing playing":
-                logger.info("Nothing playing...")
-                lastSong = "nothing playing"
-
-            weatherImage = weather.image()
-            frame.swap(weatherImage.convert('RGB'))
+            frame.swap(weather.image().convert('RGB'))
             time.sleep(10)
 
 main()
