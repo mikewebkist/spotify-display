@@ -100,15 +100,6 @@ class Weather:
         self.nextupdate = 0
         self._update()
     
-    def icontext(self):
-        return False
-        with open("%s/font-icon-map.tsv" % basepath, "r") as f:
-            for line in f:
-                num, daypart, ustr = line.rstrip().split("\t")
-                if daypart == "day":
-                    if int(self._now["weather"][0]["id"]) == int(num):
-                        return chr(int(ustr, 16))
-
     def _update(self):
         if time.time() < self.nextupdate:
             return False
@@ -141,8 +132,8 @@ class Weather:
             skyColor = (0, 0, 0)
         else:
             clouds = self.clouds() / 100.0
-            # skyColor = (0, 0, 0)
-            skyColor = (128 + int(clouds * 64), 128 + int(clouds * 64), 255 - int(clouds * 64))
+            skyColor = (32, 32, 32)
+            # skyColor = (128 + int(clouds * 64), 128 + int(clouds * 64), 255 - int(clouds * 64))
 
         iconBox = Image.new('RGBA', (32, 32), skyColor)
 
@@ -151,17 +142,6 @@ class Weather:
             moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase)).resize((24,24))
             moonDim = ImageOps.expand(ImageEnhance.Brightness(moonImage).enhance(0.75), border=4, fill=(0,0,0,0))
             iconBox.alpha_composite(moonDim)
-
-        elif self.icontext():
-            draw = ImageDraw.Draw(iconBox)
-            draw.fontmode = "L"
-            w, h = draw.textsize(self.icontext(), font=weatherFont)
-            x = (32 - w) / 2 + 1
-            y = (32 - h) / 2
-
-            draw = ImageDraw.Draw(iconBox)
-            draw.fontmode = "L"
-            draw.text((x, y), self.icontext(), skyColor, font=weatherFont)
 
         else:
             url = "http://openweathermap.org/img/wn/%s.png" % (self._now["weather"][0]["icon"])
@@ -250,7 +230,7 @@ class Weather:
                 else:
                     draw.point((m + 1, 1), fill=(32,32,32))
             except KeyError:
-                draw.point((m + 1, 1), fill=(128, 0, 0))
+                draw.point((m + 1, 1), fill=(32, 0, 0))
 
         txtImg = getTextImage([
                             (self.temp(),       (1, 0), ttfFontLg,  (192, 192, 128)),
