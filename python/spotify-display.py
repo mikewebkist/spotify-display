@@ -312,18 +312,29 @@ class Music:
             self.lastSong = self.track_id
             return True
 
+    def artists(self):
+        return tuple(map(lambda x: x["name"], self._nowplaying["item"]["artists"]))
+
+    def is_local(self):
+        return self._nowplaying["item"]["uri"].startswith("spotify:local:")
+
     def album_image(self):
-        url = self._nowplaying["item"]["album"]["images"][-1]["url"]
+        if self.is_local():
+            results = self._spotify.search(q='artist:' + self.artists()[0], type='artist')
+            url = results["artists"]["items"][0]["images"][-1]["url"]
+        else:
+            url = self._nowplaying["item"]["album"]["images"][-1]["url"]
+
         # We're going to save the processed image instead of the raw one.
         m = url.rsplit('/', 1)
         processed = "%s/%s.png" % (image_cache, m[-1])
+
         if os.path.isfile(processed):
             image = Image.open(processed)
         else:
             logger.info("Getting %s" % url)
             with urllib.request.urlopen(url) as rawimage:
-                image = Image.open(rawimage)
-                image = image.resize((32, 32), resample=Image.LANCZOS)
+                image = ImageOps.pad(Image.open(rawimage), size=(32, 32), method=Image.LANCZOS, centering=(1,0))
                 image.save(processed, "PNG")
 
         image = ImageEnhance.Color(image).enhance(0.5)
