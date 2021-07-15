@@ -145,7 +145,7 @@ class Weather:
 
         else:
             url = "http://openweathermap.org/img/wn/%s.png" % (self._now["weather"][0]["icon"])
-            filename = "%s/%s.png" % (image_cache, self._now["weather"][0]["icon"])
+            filename = "%s/weather-%s.png" % (image_cache, self._now["weather"][0]["icon"])
             if not os.path.isfile(filename):
                 logger.info("Getting %s" % url)
                 urllib.request.urlretrieve(url, filename)
@@ -318,16 +318,28 @@ class Music:
     def is_local(self):
         return self._nowplaying["item"]["uri"].startswith("spotify:local:")
 
+    def album_art(self):
+        try:
+            return self._nowplaying["item"]["album"]["images"][-1]["url"]
+        except IndexError:
+            return None
+
+    def artist_art(self):
+        results = self._spotify.search(q='artist:' + self.artists()[0], type='artist')
+        try:
+            return results["artists"]["items"][0]["images"][-1]["url"]
+        except IndexError:
+            return None
+
     def album_image(self):
-        if self.is_local():
-            results = self._spotify.search(q='artist:' + self.artists()[0], type='artist')
-            url = results["artists"]["items"][0]["images"][-1]["url"]
+        if self.album_art():
+            url = self.album_art()
         else:
-            url = self._nowplaying["item"]["album"]["images"][-1]["url"]
+            url = self.artist_art()
+        m = url.rsplit('/', 1)
+        processed = "%s/spotify-%s.png" % (image_cache, m[-1])
 
         # We're going to save the processed image instead of the raw one.
-        m = url.rsplit('/', 1)
-        processed = "%s/%s.png" % (image_cache, m[-1])
 
         if os.path.isfile(processed):
             image = Image.open(processed)
