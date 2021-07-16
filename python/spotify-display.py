@@ -274,14 +274,14 @@ class Music:
 
         try:
             self._nowplaying = self._spotify.current_user_playing_track()
-        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError, spotipy.oauth2.SpotifyOauthError) as err:
+        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError, spotipy.oauth2.SpotifyOauthError, spotipy.exceptions.SpotifyException) as err:
             logger.error("Problem getting current_user_playing_track")
             logger.error(err)
             time.sleep(10)
             return self.nextupdate - time.time()
 
         if not self.nowplaying():
-            if time.localtime()[3] <= 5:
+            if time.localtime()[3] <= 7:
                 self.nextupdate = time.time() + (5 * 60) # check in 5 minutes
             else:
                 self.nextupdate = time.time() + 30 # check in 30 seconds
@@ -293,9 +293,15 @@ class Music:
 
         if self.nowplaying():
             self.track = self._nowplaying["item"]["name"]
+            self.album = self._nowplaying["item"]["album"]["name"]
             self.artist = ", ".join(map(lambda x: x["name"], self._nowplaying["item"]["artists"]))
             self.album_id = self._nowplaying["item"]["album"]["id"]
             self.track_id = self._nowplaying["item"]["id"]        
+
+            if self.lastSong != self.track_id:
+                self.album_art_url = self.album_art()
+                self.artist_art_url = self.artist_art()
+
         return self.nextupdate - time.time()
 
     def new_album(self):
@@ -332,10 +338,10 @@ class Music:
             return None
 
     def album_image(self):
-        if self.album_art():
-            url = self.album_art()
+        if self.album_art_url:
+            url = self.album_art_url
         else:
-            url = self.artist_art()
+            url = self.artist_art_url
         m = url.rsplit('/', 1)
         processed = "%s/spotify-%s.png" % (image_cache, m[-1])
 
@@ -361,6 +367,19 @@ class Music:
         else:
             canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 128, 128)),], textColor))
         return canvas
+
+    def get_text(self, x, y, textColor):
+        if not self.album_art():
+            return getTextImage([
+                (self.track, (x, y - 10)),
+                (self.album, (x, y)),
+                (self.artist, (x, y + 10))
+                ], textColor)
+        else:
+            return getTextImage([
+                (self.track, (x, y)),
+                (self.artist, (x, y + 10))
+                ], textColor)
 
 def main():
     global weather
@@ -389,11 +408,7 @@ def main():
             # If either line of text is longer than the display, scroll
             if length >= frame.width:
                 for x in range(length + frame.width + 10):
-                    txtImg = getTextImage([
-                            (music.track, (frame.width - x, 10)),
-                            (music.artist, (frame.width - x, 20))
-                        ], textColor)
-
+                    txtImg = music.get_text(frame.width - x, 10, textColor)
                     frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
                     time.sleep(0.025)
 
@@ -405,8 +420,7 @@ def main():
                     for x in range(127):
                         # Add an alpha channel to the color for fading in
                         textColorFade = textColor + (x * 2,)
-                        txtImg = getTextImage([(music.track, (0, 10)), (music.artist, (0, 20))], textColorFade)
-
+                        txtImg = music.get_text(0, 10, textColorFade)
                         frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
 
                 txtImg = getTextImage([(music.track, (0, 10)), (music.artist, (0, 20))], textColor)
