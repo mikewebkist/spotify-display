@@ -368,8 +368,14 @@ class Music:
             canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 128, 128)),], textColor))
         return canvas
 
+    def get_text_length(self):
+        if self.album_art_url == None:
+            return max(ttfFont.getsize(self.track)[0], ttfFont.getsize(self.album)[0], ttfFont.getsize(self.artist)[0])
+        else:
+            return max(ttfFont.getsize(self.track)[0], ttfFont.getsize(self.artist)[0])
+
     def get_text(self, x, y, textColor):
-        if not self.album_art():
+        if self.album_art_url == None:
             return getTextImage([
                 (self.track, (x, y - 10)),
                 (self.album, (x, y)),
@@ -403,7 +409,7 @@ def main():
 
 
             # Length of the longest line of text, in pixels.
-            length = max(ttfFont.getsize(music.track)[0], ttfFont.getsize(music.artist)[0])
+            length = music.get_text_length()
 
             # If either line of text is longer than the display, scroll
             if length >= frame.width:
@@ -423,7 +429,7 @@ def main():
                         txtImg = music.get_text(0, 10, textColorFade)
                         frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
 
-                txtImg = getTextImage([(music.track, (0, 10)), (music.artist, (0, 20))], textColor)
+                txtImg = music.get_text(0, 10, textColor)
                 frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
                 time.sleep(2.0)
 
