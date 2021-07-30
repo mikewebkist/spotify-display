@@ -290,7 +290,7 @@ class Music:
             self.nextupdate = time.time() + 60 # cooloff for 60 seconds
             self._nowplaying = False
             logger.error("Problem getting current_user_playing_track")
-            logger.error(simplejson.dumps(err))
+            logger.error(err)
             return False
 
         if not self.nowplaying():
