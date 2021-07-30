@@ -15,7 +15,9 @@ import simplejson
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
 from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilter, ImageOps
 import urllib
+import urllib3
 import requests
+import http
 
 config = configparser.ConfigParser()
 basepath = os.path.dirname(sys.argv[0])
@@ -46,7 +48,7 @@ ttfFontLg = getFont(config["fonts"]["large"])
 
 weatherFont = ImageFont.truetype("%s/weathericons-regular-webfont.ttf" % basepath, 20)
 
-logging.basicConfig(filename='/tmp/spotify-matrix.log',level=logging.INFO)
+# logging.basicConfig(filename='/tmp/spotify-matrix.log',level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class Frame:
@@ -106,7 +108,7 @@ class Weather:
 
         try:
             r = urllib.request.urlopen(Weather.api)
-        except http.client.RemoteDisconnected as err:
+        except (http.client.RemoteDisconnected, urllib3.exceptions.ProtocolError) as err:
             logger.error("Problem getting weather")
             logger.error(err)
             time.sleep(30)
@@ -256,6 +258,7 @@ class Music:
         self.nextupdate = 0
         self.lastAlbum = ""
         self.lastSong = ""
+        self._nowplaying = False
 
         self._update()
 
@@ -274,11 +277,21 @@ class Music:
 
         try:
             self._nowplaying = self._spotify.current_user_playing_track()
-        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError, spotipy.oauth2.SpotifyOauthError, spotipy.exceptions.SpotifyException) as err:
+        except spotipy.exceptions.SpotifyException as err:
+            logger.error("Spotify error getting current_user_playing_track:")
+            if err.http_status == 429:
+                logger.error(err)
+
+            self.nextupdate = time.time() + 60 * 5 # cooloff for 5 minutes
+            self._nowplaying = False
+            return False
+
+        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError, spotipy.oauth2.SpotifyOauthError) as err:
+            self.nextupdate = time.time() + 60 # cooloff for 60 seconds
+            self._nowplaying = False
             logger.error("Problem getting current_user_playing_track")
-            logger.error(err)
-            time.sleep(10)
-            return self.nextupdate - time.time()
+            logger.error(simplejson.dumps(err))
+            return False
 
         if not self.nowplaying():
             if time.localtime()[3] <= 7:
