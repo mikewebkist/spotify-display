@@ -18,6 +18,7 @@ import urllib
 import urllib3
 import requests
 import http
+import socket
 
 config = configparser.ConfigParser()
 basepath = os.path.dirname(sys.argv[0])
@@ -108,7 +109,7 @@ class Weather:
 
         try:
             r = urllib.request.urlopen(Weather.api)
-        except (http.client.RemoteDisconnected, urllib3.exceptions.ProtocolError) as err:
+        except (http.client.RemoteDisconnected, urllib3.exceptions.ProtocolError, socket.gaierror) as err:
             logger.error("Problem getting weather")
             logger.error(err)
             time.sleep(30)
