@@ -109,7 +109,7 @@ class Weather:
 
         try:
             r = urllib.request.urlopen(Weather.api)
-        except (http.client.RemoteDisconnected, urllib3.exceptions.ProtocolError, socket.gaierror) as err:
+        except (http.client.RemoteDisconnected, urllib3.exceptions.ProtocolError, urllib.error.URLError) as err:
             logger.error("Problem getting weather")
             logger.error(err)
             time.sleep(30)
