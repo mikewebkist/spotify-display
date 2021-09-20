@@ -232,7 +232,7 @@ class Weather:
                     draw.point((m + 1, 1), fill=(128,128,255))
                 else:
                     draw.point((m + 1, 1), fill=(32,32,32))
-            except KeyError:
+            except KeyError, IndexError:
                 draw.point((m + 1, 1), fill=(32, 0, 0))
 
         txtImg = getTextImage([
@@ -278,20 +278,23 @@ class Music:
 
         try:
             self._nowplaying = self._spotify.current_user_playing_track()
-        except spotipy.exceptions.SpotifyException as err:
+        except (spotipy.exceptions.SpotifyException,
+                spotipy.oauth2.SpotifyOauthError) as err:
             logger.error("Spotify error getting current_user_playing_track:")
-            if err.http_status == 429:
-                logger.error(err)
+            logger.error(err)
 
             self.nextupdate = time.time() + 60 * 5 # cooloff for 5 minutes
             self._nowplaying = False
             return False
 
-        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError, spotipy.oauth2.SpotifyOauthError) as err:
+        except (requests.exceptions.ReadTimeout,
+                requests.exceptions.ConnectionError,
+                simplejson.errors.JSONDecodeError) as err:
+            logger.error("Protocol problem getting current_user_playing_track")
+            logger.error(err)
+
             self.nextupdate = time.time() + 60 # cooloff for 60 seconds
             self._nowplaying = False
-            logger.error("Problem getting current_user_playing_track")
-            logger.error(err)
             return False
 
         if not self.nowplaying():
