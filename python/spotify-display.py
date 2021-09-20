@@ -232,7 +232,7 @@ class Weather:
                     draw.point((m + 1, 1), fill=(128,128,255))
                 else:
                     draw.point((m + 1, 1), fill=(32,32,32))
-            except KeyError, IndexError:
+            except (KeyError, IndexError):
                 draw.point((m + 1, 1), fill=(32, 0, 0))
 
         txtImg = getTextImage([
