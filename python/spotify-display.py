@@ -240,7 +240,7 @@ class Weather:
             except (KeyError, IndexError):
                 draw.point((m + 1, 0), fill=(8, 8, 8))
 
-        mytime=datetime.now().strftime("%-H:%M")
+        mytime=datetime.now().strftime("%-I:%M")
         mytimewidth = ttfFont.getsize(mytime)[0]
 
         txtImg = getTextImage([
