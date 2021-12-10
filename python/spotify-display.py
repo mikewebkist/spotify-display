@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import configparser
+from datetime import datetime
 import spotipy
 from random import random
 import logging
@@ -68,7 +69,11 @@ class Frame:
         self.height = self.options.rows
     
     def gamma(value):
-        return round(pow(value / 255.0, 1.8) * 255.0)
+        if weather.night():
+            return round(pow(value / 255.0, 1.2) * 128.0)
+        else:
+            return round(pow(value / 255.0, 1.8) * 255.0)
+
 
     def swap(self, canvas):
         canvas = Image.eval(canvas, Frame.gamma)
@@ -135,16 +140,16 @@ class Weather:
             skyColor = (0, 0, 0)
         else:
             clouds = self.clouds() / 100.0
-            skyColor = (32, 32, 32)
-            # skyColor = (128 + int(clouds * 64), 128 + int(clouds * 64), 255 - int(clouds * 64))
+            # skyColor = (0, 0, 32)
+            skyColor = (int(clouds * 32), int(clouds * 32), 32)
 
         iconBox = Image.new('RGBA', (32, 32), skyColor)
 
         if self.night():
             phase = (((round(self._payload["daily"][0]["moon_phase"] * 8) % 8)  + 11))
-            moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase)).resize((24,24))
+            moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (image_cache, phase)).resize((20,20))
             moonDim = ImageOps.expand(ImageEnhance.Brightness(moonImage).enhance(0.75), border=4, fill=(0,0,0,0))
-            iconBox.alpha_composite(moonDim)
+            iconBox.alpha_composite(moonDim, dest=(2, -2))
 
         else:
             url = "http://openweathermap.org/img/wn/%s.png" % (self._now["weather"][0]["icon"])
@@ -154,8 +159,8 @@ class Weather:
                 urllib.request.urlretrieve(url, filename)
 
             iconImage = Image.open(filename)
-            iconImage = iconImage.crop((3, 3, 45, 45)).resize((30, 30))
-            iconBox.alpha_composite(iconImage)
+            iconImage = iconImage.crop((3, 3, 45, 45)).resize((24, 24))
+            iconBox.alpha_composite(iconImage, dest=(4, -2))
 
         return iconBox
 
@@ -211,11 +216,11 @@ class Weather:
             if t[3] == 12:
                 draw.line([(28, x+4), (30, x+4)], fill=(64, 64, 64))
 
-            diff = self.hour(x+1)["temp"] - self.hour(x)["temp"]
+            diff = self.hour(x)["temp"] - self.hour(0)["temp"]
             if diff > 1.0:
-                draw.point((28, x+4), fill=(192, 128, 32))
+                draw.point((28, x+4), fill=(128, 96, 16))
             elif diff < -1.0:
-                draw.point((28, x+4), fill=(64, 64, 255))
+                draw.point((28, x+4), fill=(32, 32, 192))
             else:
                 draw.point((28, x+4), fill=(64, 64, 64))
 
@@ -229,17 +234,21 @@ class Weather:
             try: # one time the payload didn't include minutely data...
                 rain = self._payload["minutely"][2 * m]["precipitation"] + self._payload["minutely"][2 * m + 1]["precipitation"]
                 if rain > 0:
-                    draw.point((m + 1, 1), fill=(128,128,255))
+                    draw.point((m + 1, 0), fill=(128,128,255))
                 else:
-                    draw.point((m + 1, 1), fill=(32,32,32))
+                    draw.point((m + 1, 0), fill=(32,32,32))
             except (KeyError, IndexError):
-                draw.point((m + 1, 1), fill=(32, 0, 0))
+                draw.point((m + 1, 0), fill=(8, 8, 8))
+
+        mytime=datetime.now().strftime("%-H:%M")
+        mytimewidth = ttfFont.getsize(mytime)[0]
 
         txtImg = getTextImage([
-                            (self.temp(),       (1, 0), ttfFontLg,  (192, 192, 128)),
+                            (self.temp(),       (1, -1), ttfFontLg,  (192, 192, 128)),
                             (self.humidity(),   (1, 12), ttfFontSm, (128, 192, 128)),
                             (self.wind_speed(), (1, 18), ttfFontSm, (128, 192, 192)),
                             (self.pressure(),   (1, 24), ttfFontSm, (128, 128, 128)),
+                            (mytime, (62-mytimewidth, 21), ttfFont, (128, 128, 128)),
                             ],
                             textColor)
 
