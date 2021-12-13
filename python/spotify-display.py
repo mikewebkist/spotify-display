@@ -174,8 +174,11 @@ class Weather:
     def steamy(self):
         return ktof(self._payload["current"]["feels_like"]) > 90
 
+    def icy(self):
+        return ktof(self._payload["current"]["feels_like"]) < 32
+
     def feelslike(self):
-        if self.steamy():
+        if self.steamy() or self.icy():
             return "~%.0f°" % ktof(self._payload["current"]["feels_like"])
         else:
             return self.temp()
@@ -248,7 +251,7 @@ class Weather:
                             (self.humidity(),   (1, 12), ttfFontSm, (128, 192, 128)),
                             (self.wind_speed(), (1, 18), ttfFontSm, (128, 192, 192)),
                             (self.pressure(),   (1, 24), ttfFontSm, (128, 128, 128)),
-                            (mytime, (62-mytimewidth, 21), ttfFont, (128, 128, 128)),
+                            (mytime, (48 - (mytimewidth >> 1), 21), ttfFont, (128, 128, 128)), # Centered in the right half
                             ],
                             textColor)
 
@@ -390,6 +393,8 @@ class Music:
         canvas.paste(self.album_image(), (32, 0))
         if weather.steamy():
             canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 128, 64)),], textColor))
+        elif weather.icy():
+            canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 148, 196)),], textColor))
         else:
             canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 128, 128)),], textColor))
         return canvas
