@@ -141,7 +141,8 @@ class Weather:
         else:
             clouds = self.clouds() / 100.0
             # skyColor = (0, 0, 32)
-            skyColor = (int(clouds * 32), int(clouds * 32), 32)
+            skyColor = (int(clouds * 16), int(clouds * 16), 16)
+            skyColor = (0, 0, 0)
 
         iconBox = Image.new('RGBA', (32, 32), skyColor)
 
@@ -159,8 +160,8 @@ class Weather:
                 urllib.request.urlretrieve(url, filename)
 
             iconImage = Image.open(filename)
-            iconImage = iconImage.crop((3, 3, 45, 45)).resize((24, 24))
-            iconBox.alpha_composite(iconImage, dest=(4, -2))
+            iconImage = iconImage.crop((3, 3, 45, 45)).resize((32, 32))
+            iconBox.alpha_composite(iconImage, dest=(0, -6))
 
         return iconBox
 
