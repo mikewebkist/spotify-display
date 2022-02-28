@@ -34,7 +34,10 @@ else:
 
 config.read(configfile)
 username = config["spotify"]["username"]
-devices = config["chromecast"]["devices"].split(", ")
+try:
+    devices = config["chromecast"]["devices"].split(", ")
+except KeyError:
+    devices = False
 
 image_cache = "%s/imagecache" % (basepath)
 weather = False
@@ -263,16 +266,17 @@ class Weather:
 
 class Music:
     def __init__(self):
-        chromecasts, self.browser = pychromecast.get_chromecasts()
         self.chromecasts = []
-        if chromecasts:
-            for cast in chromecasts:
-                try:
-                    idx = devices.index(cast.name)
-                    self.chromecasts.append(cast)
-                    print(cast.name)
-                except ValueError:
-                    pass
+        if devices:
+            chromecasts, self.browser = pychromecast.get_chromecasts()
+            if chromecasts:
+                for cast in chromecasts:
+                    try:
+                        idx = devices.index(cast.name)
+                        self.chromecasts.append(cast)
+                        print(cast.name)
+                    except ValueError:
+                        pass
 
         self._spotify = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=config["spotify"]["spotify_id"],
                                         client_secret=config["spotify"]["spotify_secret"],
