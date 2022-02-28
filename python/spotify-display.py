@@ -266,17 +266,13 @@ class Weather:
 
 class Music:
     def __init__(self):
-        self.chromecasts = []
         if devices:
             chromecasts, self.browser = pychromecast.get_chromecasts()
+            self.chromecasts = []
+            # This keeps everything in config file order
             if chromecasts:
-                for cast in chromecasts:
-                    try:
-                        idx = devices.index(cast.name)
-                        self.chromecasts.append(cast)
-                        print(cast.name)
-                    except ValueError:
-                        pass
+                for name in devices:
+                    self.chromecasts.append(chromecasts[list(map(lambda x: x.name, chromecasts)).index(name)])
 
         self._spotify = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=config["spotify"]["spotify_id"],
                                         client_secret=config["spotify"]["spotify_secret"],
