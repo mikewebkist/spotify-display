@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import pychromecast
 import configparser
 from datetime import datetime
 import spotipy
@@ -33,6 +34,8 @@ else:
 
 config.read(configfile)
 username = config["spotify"]["username"]
+devices = config["chromecast"]["devices"].split(", ")
+
 image_cache = "%s/imagecache" % (basepath)
 weather = False
 music = False
@@ -260,6 +263,17 @@ class Weather:
 
 class Music:
     def __init__(self):
+        chromecasts, self.browser = pychromecast.get_chromecasts()
+        self.chromecasts = []
+        if chromecasts:
+            for cast in chromecasts:
+                try:
+                    idx = devices.index(cast.name)
+                    self.chromecasts.append(cast)
+                    print(cast.name)
+                except ValueError:
+                    pass
+
         self._spotify = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=config["spotify"]["spotify_id"],
                                         client_secret=config["spotify"]["spotify_secret"],
                                         cache_handler=CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, username)),
@@ -277,20 +291,31 @@ class Music:
         self._update()
 
     def timeleft(self):
-        return round((self._nowplaying["item"]["duration_ms"] - self._nowplaying["progress_ms"]) / 1000.0)
+        return round((self.spotify_duration - self.spotify_progress) / 1000.0)
 
     def nowplaying(self):
-        if self._nowplaying and self._nowplaying["is_playing"] and self._nowplaying["item"]:
-            return True
-        else:
-            return False
+        return self._nowplaying
 
-    def _update(self):
-        if time.time() < self.nextupdate:
-            return self.nextupdate - time.time()
-
+    def _get_current_track_spotify(self):
         try:
-            self._nowplaying = self._spotify.current_user_playing_track()
+            meta = self._spotify.current_user_playing_track()
+            if meta and meta["is_playing"] and meta["item"]:
+                self._nowplaying = True
+                self.track = meta["item"]["name"]
+                self.album = meta["item"]["album"]["name"]
+                self.artist = ", ".join(map(lambda x: x["name"], meta["item"]["artists"]))
+                self.album_id = meta["item"]["album"]["id"]
+                self.track_id = meta["item"]["id"]        
+                self.album_art_url = meta["item"]["album"]["images"][-1]["url"]
+                self.artist_art_url = self.artist_art()
+                self.spotify_duration = meta["item"]["duration_ms"]
+                self.spotify_progress = meta["progress_ms"]
+                self.spotify_meta = meta
+                if self.timeleft() > 30:
+                    self.nextupdate = time.time() + 10
+                else:
+                    self.nextupdate = time.time() + self.timeleft()
+
         except (spotipy.exceptions.SpotifyException,
                 spotipy.oauth2.SpotifyOauthError) as err:
             logger.error("Spotify error getting current_user_playing_track:")
@@ -310,27 +335,37 @@ class Music:
             self._nowplaying = False
             return False
 
+    def _get_current_track_chromecast(self):
+        self._nowplaying = False
+        for cast in self.chromecasts:
+            cast.wait()
+            if cast.media_controller.status.player_is_playing:
+                meta = cast.media_controller.status.media_metadata
+                self._nowplaying = True
+                self.track = meta["title"]
+                self.album = meta["albumName"]
+                self.artist = meta["artist"]
+                self.album_id = "%s/%s" % (meta["albumName"], meta["artist"])
+                self.track_id = "%s/%s/%s" % (meta["title"], meta["albumName"], meta["artist"])
+                self.album_art_url = meta["images"][0]["url"]
+                self.artist_art_url = False
+                self.nextupdate = time.time() + 2
+                break
+
+    def _update(self):
+        self._get_current_track_chromecast()
+        if not self.nowplaying():
+            self._get_current_track_spotify()
+
+        if time.time() < self.nextupdate:
+            return self.nextupdate - time.time()
+
         if not self.nowplaying():
             if time.localtime()[3] <= 7:
                 self.nextupdate = time.time() + (5 * 60) # check in 5 minutes
             else:
-                self.nextupdate = time.time() + 30 # check in 30 seconds
+                self.nextupdate = time.time() + 60 # check in 1 minute
             return False
-        elif self.timeleft() > 30:
-            self.nextupdate = time.time() + 10
-        else:
-            self.nextupdate = time.time() + self.timeleft()
-
-        if self.nowplaying():
-            self.track = self._nowplaying["item"]["name"]
-            self.album = self._nowplaying["item"]["album"]["name"]
-            self.artist = ", ".join(map(lambda x: x["name"], self._nowplaying["item"]["artists"]))
-            self.album_id = self._nowplaying["item"]["album"]["id"]
-            self.track_id = self._nowplaying["item"]["id"]        
-
-            if self.lastSong != self.track_id:
-                self.album_art_url = self.album_art()
-                self.artist_art_url = self.artist_art()
 
         return self.nextupdate - time.time()
 
@@ -361,7 +396,7 @@ class Music:
             return None
 
     def artist_art(self):
-        results = self._spotify.search(q='artist:' + self.artists()[0], type='artist')
+        results = self._spotify.search(q='artist:' + self.artist, type='artist')
         try:
             return results["artists"]["items"][0]["images"][-1]["url"]
         except IndexError:
@@ -373,7 +408,7 @@ class Music:
         else:
             url = self.artist_art_url
         m = url.rsplit('/', 1)
-        processed = "%s/spotify-%s.png" % (image_cache, m[-1])
+        processed = "%s/album-%s.png" % (image_cache, m[-1])
 
         # We're going to save the processed image instead of the raw one.
 
