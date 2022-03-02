@@ -347,11 +347,11 @@ class Music:
                     meta = cast.media_controller.status.media_metadata
                     self._nowplaying = True
                     self.track = meta["title"]
-                    self.album = meta["albumName"]
-                    self.artist = meta["artist"]
-                    self.album_id = "%s/%s" % (meta["albumName"], meta["artist"])
-                    self.track_id = "%s/%s/%s" % (meta["title"], meta["albumName"], meta["artist"])
-                    self.album_art_url = meta["images"][0]["url"]
+                    self.album = meta["albumName"] if "albumName" in meta else ""
+                    self.artist = meta["artist"] if "artist" in meta else meta["subtitle"] if "subtitle" in meta else ""
+                    self.album_id = "%s/%s" % (self.album, self.artist)
+                    self.track_id = "%s/%s/%s" % (self.track, self.album, self.artist)
+                    self.album_art_url = meta["images"][0]["url"] if "images" in meta else False
                     self.artist_art_url = False
                     self.nextupdate = time.time() + 2
                 except:
