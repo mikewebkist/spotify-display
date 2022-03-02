@@ -272,7 +272,10 @@ class Music:
             # This keeps everything in config file order
             if chromecasts:
                 for name in devices:
-                    self.chromecasts.append(chromecasts[list(map(lambda x: x.name, chromecasts)).index(name)])
+                    try:
+                        self.chromecasts.append(chromecasts[list(map(lambda x: x.name, chromecasts)).index(name)])
+                    except ValueError:
+                        pass
 
         self._spotify = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=config["spotify"]["spotify_id"],
                                         client_secret=config["spotify"]["spotify_secret"],
@@ -353,12 +356,12 @@ class Music:
                 break
 
     def _update(self):
+        if time.time() < self.nextupdate:
+            return self.nextupdate - time.time()
+
         self._get_current_track_chromecast()
         if not self.nowplaying():
             self._get_current_track_spotify()
-
-        if time.time() < self.nextupdate:
-            return self.nextupdate - time.time()
 
         if not self.nowplaying():
             if time.localtime()[3] <= 7:
