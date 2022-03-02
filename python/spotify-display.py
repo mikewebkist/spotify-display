@@ -343,16 +343,20 @@ class Music:
         for cast in self.chromecasts:
             cast.wait()
             if cast.media_controller.status.player_is_playing:
-                meta = cast.media_controller.status.media_metadata
-                self._nowplaying = True
-                self.track = meta["title"]
-                self.album = meta["albumName"]
-                self.artist = meta["artist"]
-                self.album_id = "%s/%s" % (meta["albumName"], meta["artist"])
-                self.track_id = "%s/%s/%s" % (meta["title"], meta["albumName"], meta["artist"])
-                self.album_art_url = meta["images"][0]["url"]
-                self.artist_art_url = False
-                self.nextupdate = time.time() + 2
+                try:
+                    meta = cast.media_controller.status.media_metadata
+                    self._nowplaying = True
+                    self.track = meta["title"]
+                    self.album = meta["albumName"]
+                    self.artist = meta["artist"]
+                    self.album_id = "%s/%s" % (meta["albumName"], meta["artist"])
+                    self.track_id = "%s/%s/%s" % (meta["title"], meta["albumName"], meta["artist"])
+                    self.album_art_url = meta["images"][0]["url"]
+                    self.artist_art_url = False
+                    self.nextupdate = time.time() + 2
+                except:
+                    print(meta)
+                    pass
                 break
 
     def _update(self):
