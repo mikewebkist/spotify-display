@@ -355,7 +355,6 @@ class Music:
                     self.artist_art_url = False
                     self.nextupdate = time.time() + 2
                 except:
-                    print(meta)
                     pass
                 break
 
@@ -412,8 +411,11 @@ class Music:
     def album_image(self):
         if self.album_art_url:
             url = self.album_art_url
-        else:
+        elif self.artist_art_url:
             url = self.artist_art_url
+        else: # if we don't have any art, show the weather icon
+            return weather.icon()
+
         m = url.rsplit('/', 1)
         processed = "%s/album-%s.png" % (image_cache, m[-1])
 
