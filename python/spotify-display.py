@@ -87,7 +87,7 @@ class Frame:
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
 def getTextImage(texts, color):
-    txtImg = Image.new('RGBA', (64, 32), (255, 255, 255, 0))
+    txtImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
     draw = ImageDraw.Draw(txtImg)
     for text, position, *font in texts:
         if font:
@@ -214,7 +214,7 @@ class Weather:
     def image(self):
         self._update()
 
-        canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
+        canvas = Image.new('RGBA', (64, 64), (0, 0, 0))
         draw = ImageDraw.Draw(canvas)
         
         for x in range(24):
@@ -426,7 +426,7 @@ class Music:
         else:
             logger.info("Getting %s" % url)
             with urllib.request.urlopen(url) as rawimage:
-                image = ImageOps.pad(Image.open(rawimage), size=(32, 32), method=Image.LANCZOS, centering=(1,0))
+                image = ImageOps.pad(Image.open(rawimage), size=(64,64), method=Image.LANCZOS, centering=(1,0))
                 image.save(processed, "PNG")
 
         image = ImageEnhance.Color(image).enhance(0.5)
@@ -434,8 +434,8 @@ class Music:
         return image
 
     def canvas(self):
-        canvas = Image.new('RGBA', (64, 32), (0,0,0))
-        canvas.paste(self.album_image(), (32, 0))
+        canvas = Image.new('RGBA', (64, 64), (0,0,0))
+        canvas.paste(self.album_image(), (0, 0))
         if weather.steamy():
             canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 128, 64)),], textColor))
         elif weather.icy():
@@ -490,7 +490,7 @@ def main():
             # If either line of text is longer than the display, scroll
             if length >= frame.width:
                 for x in range(length + frame.width + 10):
-                    txtImg = music.get_text(frame.width - x, 10, textColor)
+                    txtImg = music.get_text(frame.width - x, 42, textColor)
                     frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
                     time.sleep(0.025)
 
@@ -502,10 +502,10 @@ def main():
                     for x in range(127):
                         # Add an alpha channel to the color for fading in
                         textColorFade = textColor + (x * 2,)
-                        txtImg = music.get_text(0, 10, textColorFade)
+                        txtImg = music.get_text(0, 42, textColorFade)
                         frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
 
-                txtImg = music.get_text(0, 10, textColor)
+                txtImg = music.get_text(0, 42, textColor)
                 frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
                 time.sleep(2.0)
 
