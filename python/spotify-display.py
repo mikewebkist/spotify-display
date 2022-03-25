@@ -445,8 +445,6 @@ class Music:
             canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 128, 64)),], textColor))
         elif weather.icy():
             canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 148, 196)),], textColor))
-        else:
-            canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 128, 128)),], textColor))
         return canvas
 
     def get_text_length(self):
