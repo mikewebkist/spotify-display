@@ -408,6 +408,9 @@ class Music:
         except IndexError:
             return None
 
+    def gamma(value):
+        return round(pow(value / 255.0, 1.8) * 256.0)
+
     def album_image(self):
         if self.album_art_url:
             url = self.album_art_url
@@ -429,8 +432,10 @@ class Music:
                 image = ImageOps.pad(Image.open(rawimage), size=(64,64), method=Image.LANCZOS, centering=(1,0))
                 image.save(processed, "PNG")
 
-        image = ImageEnhance.Color(image).enhance(0.5)
-        image = ImageEnhance.Brightness(image).enhance(0.85)
+        image = Image.eval(image, Music.gamma)
+
+        # image = ImageEnhance.Brightness(image).enhance(0.75)
+        image = ImageEnhance.Contrast(image).enhance(0.80)
         return image
 
     def canvas(self):
