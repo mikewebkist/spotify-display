@@ -76,9 +76,9 @@ class Frame:
     
     def gamma(value):
         if weather.night():
-            return round(pow(value / 255.0, 1.2) * 128.0)
+            return round(pow(value / 255.0, 2.2) * 128.0)
         else:
-            return round(pow(value / 255.0, 1.8) * 255.0)
+            return round(pow(value / 255.0, 2.2) * 255.0)
 
 
     def swap(self, canvas):
@@ -408,9 +408,6 @@ class Music:
         except IndexError:
             return None
 
-    def gamma(value):
-        return round(pow(value / 255.0, 1.8) * 256.0)
-
     def album_image(self):
         if self.album_art_url:
             url = self.album_art_url
@@ -432,10 +429,7 @@ class Music:
                 image = ImageOps.pad(Image.open(rawimage), size=(64,64), method=Image.LANCZOS, centering=(1,0))
                 image.save(processed, "PNG")
 
-        image = Image.eval(image, Music.gamma)
-
-        # image = ImageEnhance.Brightness(image).enhance(0.75)
-        image = ImageEnhance.Contrast(image).enhance(0.80)
+        # image = ImageEnhance.Contrast(image).enhance(0.80)
         return image
 
     def canvas(self):
