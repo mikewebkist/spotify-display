@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import colorsys
 import pychromecast
 import configparser
 from datetime import datetime
@@ -53,6 +54,7 @@ def getFont(fontconfig):
 ttfFont = getFont(config["fonts"]["regular"])
 ttfFontSm = getFont(config["fonts"]["small"])
 ttfFontLg = getFont(config["fonts"]["large"])
+ttfFontTime = getFont(config["fonts"]["time"])
 
 weatherFont = ImageFont.truetype("%s/weathericons-regular-webfont.ttf" % basepath, 20)
 
@@ -76,9 +78,9 @@ class Frame:
     
     def gamma(value):
         if weather.night():
-            return round(pow(value / 255.0, 2.2) * 128.0)
+            return round(pow(value / 255.0, 1.5) * 128.0)
         else:
-            return round(pow(value / 255.0, 2.2) * 255.0)
+            return round(pow(value / 255.0, 1.5) * 255.0)
 
 
     def swap(self, canvas):
@@ -86,7 +88,7 @@ class Frame:
         self.offscreen_canvas.SetImage(canvas, 0, 0)
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
-def getTextImage(texts, color):
+def getTextImage(texts, color, fontmode="1", dropshadow=True):
     txtImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
     draw = ImageDraw.Draw(txtImg)
     for text, position, *font in texts:
@@ -97,8 +99,9 @@ def getTextImage(texts, color):
             lineFont = ttfFont
             lineColor = color
         (x, y) = position
-        draw.fontmode = "1"
-        draw.text((x - 1, y + 1), text, (0,0,0), font=lineFont)
+        draw.fontmode = fontmode
+        if dropshadow:
+            draw.text((x - 1, y + 1), text, (0,0,0), font=lineFont)
         draw.text((x,     y    ), text, lineColor,   font=lineFont)
     return txtImg
 
@@ -237,7 +240,7 @@ class Weather:
         iconImage = self.icon()
         # We're replaceing the entire right side of
         # the image, so no need for alpha blending
-        canvas.paste(iconImage, (32, 0))
+        canvas.paste(iconImage, (32, 6))
 
         # A little indicator of rain in the next hour. Each pixel represents two minutes.
         for m in range(30):
@@ -251,16 +254,30 @@ class Weather:
                 draw.point((m + 1, 0), fill=(8, 8, 8))
 
         mytime=datetime.now().strftime("%-I:%M")
-        mytimewidth = ttfFont.getsize(mytime)[0]
 
         txtImg = getTextImage([
                             (self.temp(),       (1, -1), ttfFontLg,  (192, 192, 128)),
                             (self.humidity(),   (1, 12), ttfFontSm, (128, 192, 128)),
                             (self.wind_speed(), (1, 18), ttfFontSm, (128, 192, 192)),
                             (self.pressure(),   (1, 24), ttfFontSm, (128, 128, 128)),
-                            (mytime, (48 - (mytimewidth >> 1), 21), ttfFont, (128, 128, 128)), # Centered in the right half
                             ],
                             textColor)
+
+        def hsv2rgb(h,s,v):
+                return tuple(int(i * 256) for i in colorsys.hsv_to_rgb(h,s,v))
+
+        draw.rectangle([(0,37), (64,64)],
+                fill=hsv2rgb((datetime.now().timestamp() % 1000.0) / 1000.0, 1.0, 0.25))
+
+        timeImg = getTextImage([ (
+                             mytime,
+                             (32 - (ttfFontTime.getsize(mytime)[0] >> 1), 48 - (ttfFontTime.getsize(mytime)[1] >> 1)),
+                             ttfFontTime,
+                             hsv2rgb(((datetime.now().timestamp()) % 300.0) / 300.0, 0.5, 0.75),
+                             ) ],
+                            textColor, fontmode=None, dropshadow=False)
+
+        canvas = Image.alpha_composite(canvas, timeImg)
 
         return Image.alpha_composite(canvas, txtImg).convert('RGB')
 
@@ -440,8 +457,6 @@ class Music:
             canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 128, 64)),], textColor))
         elif weather.icy():
             canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 148, 196)),], textColor))
-        else:
-            canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 128, 128)),], textColor))
         return canvas
 
     def get_text_length(self):
@@ -494,7 +509,7 @@ def main():
                     frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
                     time.sleep(0.025)
 
-                time.sleep(1.25)
+                time.sleep(2.0)
 
             # If all the text fits, don't scroll.
             else:
@@ -512,6 +527,6 @@ def main():
         # Nothing is playing
         else:
             frame.swap(weather.image().convert('RGB'))
-            time.sleep(10)
+            time.sleep(0.5)
 
 main()
