@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import asyncio
 import colorsys
 import pychromecast
 import configparser
@@ -43,6 +44,7 @@ except KeyError:
 image_cache = "%s/imagecache" % (basepath)
 weather = False
 music = False
+frame = False
 
 def getFont(fontconfig):
     path, size = fontconfig.split(",")
@@ -114,30 +116,29 @@ class Weather:
     api = "https://api.openweathermap.org/data/2.5/onecall?lat=39.9623348&lon=-75.1927043&appid=%s" % (config["openweathermap"]["api_key"])
 
     def __init__(self):
-        self.nextupdate = 0
-        self._update()
+        pass
+        # self._update()
     
     def _update(self):
-        if time.time() < self.nextupdate:
-            return False
+        print("in weather update...")
 
         try:
             r = urllib.request.urlopen(Weather.api)
         except (http.client.RemoteDisconnected, urllib3.exceptions.ProtocolError, urllib.error.URLError) as err:
             logger.error("Problem getting weather")
             logger.error(err)
-            time.sleep(30)
-            return self.nextupdate - time.time()
+            return 30
 
         self._payload = simplejson.loads(r.read())
+        self._lastupdate= datetime.now().timestamp()
         self._now = self._payload["current"]
 
         # Update every 30 minutes overnight to save API calls
-        if time.localtime()[3] <= 5:      
-            self.nextupdate = time.time() + (60 * 30)
+        if time.localtime()[3] <= 5:
+            return 60 * 30
         else:
-            self.nextupdate = time.time() + (60 * 5)
-        
+            return 60 * 5
+
     def night(self):
         if self._now["dt"] > (self._now["sunset"] + 1080) or self._now["dt"] < (self._now["sunrise"] - 1080):
             return True
@@ -215,8 +216,6 @@ class Weather:
         return "%.1f\"" % (self._payload["current"]["pressure"] * 0.0295301)
 
     def image(self):
-        self._update()
-
         canvas = Image.new('RGBA', (64, 64), (0, 0, 0))
         draw = ImageDraw.Draw(canvas)
         
@@ -388,7 +387,6 @@ class Music:
                 self.nextupdate = time.time() + (5 * 60) # check in 5 minutes
             else:
                 self.nextupdate = time.time() + 60 # check in 1 minute
-            return False
 
         return self.nextupdate - time.time()
 
@@ -478,17 +476,8 @@ class Music:
                 (self.artist, (x, y + 10))
                 ], textColor)
 
-def main():
-    global weather
-
-    frame = Frame()
-    weather = Weather()
-    music = Music()
-
+async def main():
     while True:
-        music._update()
-        weather._update()
-
         # We have a playing track.
         if music.nowplaying():
             canvas = music.canvas()
@@ -496,7 +485,7 @@ def main():
             if music.new_album():
                 for x in range(127):
                     frame.swap(ImageEnhance.Brightness(canvas).enhance(x * 2 / 255.0).convert('RGB'))
-                time.sleep(0.5)
+                await asyncio.sleep(0.5)
 
 
             # Length of the longest line of text, in pixels.
@@ -507,9 +496,9 @@ def main():
                 for x in range(length + frame.width + 10):
                     txtImg = music.get_text(frame.width - x, 42, textColor)
                     frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
-                    time.sleep(0.025)
+                    await asyncio.sleep(0.025)
 
-                time.sleep(2.0)
+                await asyncio.sleep(2.0)
 
             # If all the text fits, don't scroll.
             else:
@@ -522,11 +511,30 @@ def main():
 
                 txtImg = music.get_text(0, 42, textColor)
                 frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
-                time.sleep(2.0)
+                await asyncio.sleep(2.0)
 
         # Nothing is playing
         else:
             frame.swap(weather.image().convert('RGB'))
-            time.sleep(0.5)
 
-main()
+
+async def update_async(obj):
+    while True:
+        objtype = type(obj)
+        delay = obj._update()
+        print(f"Delaying for {delay:.0f} secs for {objtype}")
+        await asyncio.sleep(delay)
+
+async def metamain():
+    weatherTask = asyncio.create_task(update_async(weather))
+    musicTask = asyncio.create_task(update_async(music))
+
+    mainTask = asyncio.create_task(main())
+    await mainTask
+    await weatherTask
+
+weather = Weather()
+frame = Frame()
+music = Music()
+
+asyncio.run(metamain())
