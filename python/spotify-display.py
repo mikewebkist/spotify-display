@@ -84,13 +84,12 @@ class Frame:
         else:
             return round(pow(value / 255.0, 1.5) * 255.0)
 
-
     def swap(self, canvas):
         canvas = Image.eval(canvas, Frame.gamma)
         self.offscreen_canvas.SetImage(canvas, 0, 0)
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
-def getTextImage(texts, color, fontmode="1", dropshadow=True):
+def getTextImage(texts, color, fontmode="1", dropshadow=1):
     txtImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
     draw = ImageDraw.Draw(txtImg)
     for text, position, *font in texts:
@@ -102,9 +101,9 @@ def getTextImage(texts, color, fontmode="1", dropshadow=True):
             lineColor = color
         (x, y) = position
         draw.fontmode = fontmode
-        if dropshadow:
-            draw.text((x - 1, y + 1), text, (0,0,0), font=lineFont)
-        draw.text((x,     y    ), text, lineColor,   font=lineFont)
+        if dropshadow > 0:
+            draw.text((x + dropshadow, y + dropshadow), text, (0,0,0), font=lineFont)
+        draw.text((x, y), text, lineColor,   font=lineFont)
     return txtImg
 
 textColor = (192, 192, 192)
@@ -117,11 +116,8 @@ class Weather:
 
     def __init__(self):
         pass
-        # self._update()
     
     def _update(self):
-        print("in weather update...")
-
         try:
             r = urllib.request.urlopen(Weather.api)
         except (http.client.RemoteDisconnected, urllib3.exceptions.ProtocolError, urllib.error.URLError) as err:
@@ -265,16 +261,16 @@ class Weather:
         def hsv2rgb(h,s,v):
                 return tuple(int(i * 256) for i in colorsys.hsv_to_rgb(h,s,v))
 
-        draw.rectangle([(0,37), (64,64)],
-                fill=hsv2rgb((datetime.now().timestamp() % 1000.0) / 1000.0, 1.0, 0.25))
+        draw.rectangle([(0,37), (63,63)],
+                fill=hsv2rgb((datetime.now().timestamp() % 100.0) / 100.0, 1.0, 0.25))
 
         timeImg = getTextImage([ (
                              mytime,
                              (32 - (ttfFontTime.getsize(mytime)[0] >> 1), 48 - (ttfFontTime.getsize(mytime)[1] >> 1)),
                              ttfFontTime,
-                             hsv2rgb(((datetime.now().timestamp()) % 300.0) / 300.0, 0.5, 0.75),
+                             hsv2rgb(((datetime.now().timestamp()) % 30.0) / 30.0, 0.5, 0.75),
                              ) ],
-                            textColor, fontmode=None, dropshadow=False)
+                            textColor, fontmode="1", dropshadow=2)
 
         canvas = Image.alpha_composite(canvas, timeImg)
 
@@ -307,7 +303,19 @@ class Music:
         self.lastSong = ""
         self._nowplaying = False
 
-        self._update()
+    def _update(self):
+        self._get_current_track_chromecast()
+
+        if not self.nowplaying():
+            self._get_current_track_spotify()
+
+        if not self.nowplaying():
+            if time.localtime()[3] <= 7:
+                self.nextupdate = time.time() + (5 * 60) # check in 5 minutes
+            else:
+                self.nextupdate = time.time() + 60 # check in 1 minute
+
+        return 2.0
 
     def timeleft(self):
         return round((self.spotify_duration - self.spotify_progress) / 1000.0)
@@ -316,6 +324,9 @@ class Music:
         return self._nowplaying
 
     def _get_current_track_spotify(self):
+        if time.time() < self.nextupdate:
+            return self.nextupdate - time.time()
+
         try:
             meta = self._spotify.current_user_playing_track()
             if meta and meta["is_playing"] and meta["item"]:
@@ -372,23 +383,8 @@ class Music:
                     self.nextupdate = time.time() + 2
                 except:
                     pass
+
                 break
-
-    def _update(self):
-        if time.time() < self.nextupdate:
-            return self.nextupdate - time.time()
-
-        self._get_current_track_chromecast()
-        if not self.nowplaying():
-            self._get_current_track_spotify()
-
-        if not self.nowplaying():
-            if time.localtime()[3] <= 7:
-                self.nextupdate = time.time() + (5 * 60) # check in 5 minutes
-            else:
-                self.nextupdate = time.time() + 60 # check in 1 minute
-
-        return self.nextupdate - time.time()
 
     def new_album(self):
         if self.lastAlbum == self.album_id:
@@ -451,10 +447,12 @@ class Music:
     def canvas(self):
         canvas = Image.new('RGBA', (64, 64), (0,0,0))
         canvas.paste(self.album_image(), (0, 0))
+
         if weather.steamy():
             canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 128, 64)),], textColor))
         elif weather.icy():
             canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 148, 196)),], textColor))
+
         return canvas
 
     def get_text_length(self):
@@ -485,20 +483,17 @@ async def main():
             if music.new_album():
                 for x in range(127):
                     frame.swap(ImageEnhance.Brightness(canvas).enhance(x * 2 / 255.0).convert('RGB'))
-                await asyncio.sleep(0.5)
-
 
             # Length of the longest line of text, in pixels.
             length = music.get_text_length()
 
             # If either line of text is longer than the display, scroll
             if length >= frame.width:
-                for x in range(length + frame.width + 10):
+                for x in range(length + frame.width):
                     txtImg = music.get_text(frame.width - x, 42, textColor)
                     frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
-                    await asyncio.sleep(0.025)
-
-                await asyncio.sleep(2.0)
+                    await asyncio.sleep(0.0125)
+                await asyncio.sleep(1.5)
 
             # If all the text fits, don't scroll.
             else:
@@ -511,27 +506,26 @@ async def main():
 
                 txtImg = music.get_text(0, 42, textColor)
                 frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
-                await asyncio.sleep(2.0)
 
         # Nothing is playing
         else:
             frame.swap(weather.image().convert('RGB'))
 
+        await asyncio.sleep(0)
 
 async def update_async(obj):
     while True:
         objtype = type(obj)
         delay = obj._update()
-        print(f"Delaying for {delay:.0f} secs for {objtype}")
         await asyncio.sleep(delay)
 
 async def metamain():
-    weatherTask = asyncio.create_task(update_async(weather))
-    musicTask = asyncio.create_task(update_async(music))
-
-    mainTask = asyncio.create_task(main())
-    await mainTask
-    await weatherTask
+    L = await asyncio.gather(
+        update_async(weather),
+        update_async(music),
+        main()
+    )
+    print(L)
 
 weather = Weather()
 frame = Frame()
