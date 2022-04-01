@@ -90,7 +90,11 @@ class Frame:
 
     def swap(self, canvas):
         canvas = Image.eval(canvas, Frame.gamma)
-        self.offscreen_canvas.SetImage(canvas, 0, 0)
+        if self.height < 64:
+            ts = (round(datetime.now().timestamp() / 15) % 2) * 32
+            self.offscreen_canvas.SetImage(canvas, 0, 0 - ts)
+        else:
+            self.offscreen_canvas.SetImage(canvas, 0, 0)
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
 def getTextImage(texts, color, fontmode="1", dropshadow=1):
@@ -360,7 +364,7 @@ class Music:
                     return 60.0
                 if timeleft > 20.0:
                     return timeleft / 2.0
-                elif timeleft > 0:
+                else:
                     return timeleft
             else:
                 self.spotify_songinfo = None
@@ -558,7 +562,6 @@ async def update_weather():
 async def update_chromecast():
     while True:
         delay = music.get_playing_chromecast()
-        print(delay)
         await asyncio.sleep(delay)
 
 async def update_spotify():
