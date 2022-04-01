@@ -90,11 +90,7 @@ class Frame:
 
     def swap(self, canvas):
         canvas = Image.eval(canvas, Frame.gamma)
-        if self.height < 64:
-            ts = (round(datetime.now().timestamp() / 15) % 2) * 32
-            self.offscreen_canvas.SetImage(canvas, 0, 0 - ts)
-        else:
-            self.offscreen_canvas.SetImage(canvas, 0, 0)
+        self.offscreen_canvas.SetImage(canvas, 0, 0)
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
 def getTextImage(texts, color, fontmode="1", dropshadow=1):
@@ -352,7 +348,7 @@ class Music:
                         "artist": ", ".join(map(lambda x: x["name"], meta["item"]["artists"])),
                         "album_id": meta["item"]["album"]["id"],
                         "track_id": meta["item"]["id"],
-                        "album_art_url": meta["item"]["album"]["images"][-1]["url"],
+                        "album_art_url": meta["item"]["album"]["images"][0]["url"],
                         "artist_art_url": False,
                         "spotify_duration": meta["item"]["duration_ms"],
                         "spotify_progress": meta["progress_ms"],
@@ -476,9 +472,12 @@ class Music:
                 image = ImageOps.pad(Image.open(rawimage), size=(64,64), method=Image.LANCZOS, centering=(1,0))
                 image.save(processed, "PNG")
 
-        # image = ImageEnhance.Brightness(image).enhance(0.75)
-        # image = ImageEnhance.Contrast(image).enhance(0.80)
-        return image
+        if frame.height < 64:
+            cover = Image.new('RGBA', (64, 64), (0,0,0))
+            cover.paste(image.resize((frame.height, frame.height), Image.LANCZOS), (64 - frame.height, 0))
+            return cover
+        else:
+            return image
 
     def canvas(self):
         canvas = Image.new('RGBA', (64, 64), (0,0,0))
@@ -528,7 +527,7 @@ async def main():
                 # If either line of text is longer than the display, scroll
                 if length >= frame.width:
                     for x in range(length + frame.width + 10):
-                        txtImg = music.get_text(frame.width - x, 42, textColor)
+                        txtImg = music.get_text(frame.width - x, frame.height - 22, textColor)
                         frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
                         await asyncio.sleep(0.0125)
                     await asyncio.sleep(1.5)
@@ -539,10 +538,10 @@ async def main():
                         for x in range(127):
                             # Add an alpha channel to the color for fading in
                             textColorFade = textColor + (x * 2,)
-                            txtImg = music.get_text(0, 42, textColorFade)
+                            txtImg = music.get_text(0, frame.height - 22, textColorFade)
                             frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
 
-                    txtImg = music.get_text(0, 42, textColor)
+                    txtImg = music.get_text(0, frame.height - 22, textColor)
                     frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
             except:
                 # This is because if you pause while the text is scrolling, it crashes. :(
