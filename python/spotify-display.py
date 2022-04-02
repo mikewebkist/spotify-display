@@ -93,7 +93,7 @@ class Frame:
         self.offscreen_canvas.SetImage(canvas, 0, 0)
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
-def getTextImage(texts, color, fontmode="1", dropshadow=1):
+def getTextImage(texts, color, fontmode="1", dropshadow=(1,1)):
     txtImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
     draw = ImageDraw.Draw(txtImg)
     draw.fontmode = fontmode
@@ -105,8 +105,8 @@ def getTextImage(texts, color, fontmode="1", dropshadow=1):
             lineFont = ttfFont
             lineColor = color
         (x, y) = position
-        if dropshadow > 0:
-            draw.text((x + dropshadow, y + dropshadow), text, (0,0,0), font=lineFont)
+        if dropshadow:
+            draw.text((x + dropshadow[0], y + dropshadow[1]), text, (0,0,0), font=lineFont)
         draw.text((x, y), text, lineColor,   font=lineFont)
     return txtImg
 
@@ -283,7 +283,7 @@ class Weather:
                              ttfFontTime,
                              (0,0,0,192),
                              ) ],
-                            textColor, fontmode=None, dropshadow=0)
+                            textColor, fontmode=None, dropshadow=None)
         canvas = Image.alpha_composite(canvas, timeImg)
 
         timeImg = getTextImage([ (
@@ -292,7 +292,7 @@ class Weather:
                              ttfFontTime,
                              hsv2rgb((ts % 30.0) / 30.0, 0.5, 0.75),
                              ) ],
-                            textColor, fontmode="1", dropshadow=0)
+                            textColor, fontmode="1", dropshadow=None)
 
         canvas = Image.alpha_composite(canvas, timeImg)
 
@@ -346,14 +346,16 @@ class Music:
                         "track": meta["item"]["name"],
                         "album": meta["item"]["album"]["name"],
                         "artist": ", ".join(map(lambda x: x["name"], meta["item"]["artists"])),
-                        "album_id": meta["item"]["album"]["id"],
-                        "track_id": meta["item"]["id"],
                         "album_art_url": meta["item"]["album"]["images"][0]["url"],
                         "artist_art_url": False,
                         "spotify_duration": meta["item"]["duration_ms"],
                         "spotify_progress": meta["progress_ms"],
                         "spotify_meta": meta,
                         }
+
+                obj["album_id"] = "%s/%s" % (obj["album"], obj["artist"]),
+                obj["track_id"] = "%s/%s/%s" % (obj["track"], obj["album"], obj["artist"]),
+
                 self.spotify_songinfo = obj
                 timeleft = round((obj["spotify_duration"] - obj["spotify_progress"]) / 1000.0) 
                 if timeleft > 120.0:
@@ -409,17 +411,17 @@ class Music:
                 elif cast.media_controller.status.duration:
                     timeleft = round((cast.media_controller.status.duration - cast.media_controller.status.adjusted_current_time))
                     if timeleft > 10.0:
-                        return 10.5
+                        return 10.0
                     else:
-                        return timeleft + 0.5
+                        return timeleft
                 else:
                     print(cast.media_controller.status)
-                    return 5.0
+                    return 2.0
                 break
         else:
             self.chromecast_songinfo = None
 
-        return 5.0
+        return 2.0
 
     def new_album(self):
         if self.lastAlbum == self.nowplaying()["album_id"]:
@@ -429,10 +431,10 @@ class Music:
             return True
 
     def new_song(self):
-        if self.lastSong == self.nowplaying()["track"]:
+        if self.lastSong == self.nowplaying()["track_id"]:
             return False
         else:
-            self.lastSong = self.nowplaying()["track"]
+            self.lastSong = self.nowplaying()["track_id"]
             return True
 
     def album_art(self):
@@ -496,62 +498,68 @@ class Music:
         else:
             return max(ttfFont.getsize(self.nowplaying()["track"])[0], ttfFont.getsize(self.nowplaying()["artist"])[0])
 
-    def get_text(self, x, y, textColor):
+    def get_text(self, x, y, textColor, dropshadow=(1,1)):
         if self.album_art() == None:
             return getTextImage([
                 (self.nowplaying()["track"], (x, y - 10)),
                 (self.nowplaying()["album"], (x, y)),
                 (self.nowplaying()["artist"], (x, y + 10))
-                ], textColor)
+                ], textColor, dropshadow=dropshadow)
         else:
             return getTextImage([
                 (self.nowplaying()["track"], (x, y)),
                 (self.nowplaying()["artist"], (x, y + 10))
-                ], textColor)
+                ], textColor, dropshadow=dropshadow)
 
-async def main():
-    while True:
-        # We have a playing track.
-        if music.nowplaying():
-            try:
-                canvas = music.canvas()
+def main():
+    # We have a playing track.
+    if music.nowplaying():
+        try:
+            canvas = music.canvas()
 
-                if music.new_album():
-                    print("Now playing %s" % music.nowplaying()["track"])
-                    for x in range(127):
-                        frame.swap(ImageEnhance.Brightness(canvas).enhance(x * 2 / 255.0).convert('RGB'))
+            is_new_song = music.new_song()
 
-                # Length of the longest line of text, in pixels.
-                length = music.get_text_length()
+            # Fade in new album covers
+            if music.new_album():
+                print("%s: now playing album: %s" % ("chromecast" if music.chromecast_songinfo else "spotify", music.nowplaying()["album"]))
+                for x in range(127):
+                    frame.swap(ImageEnhance.Brightness(canvas).enhance(x * 2 / 255.0).convert('RGB'))
+                    # time.sleep(0.0125)
 
-                # If either line of text is longer than the display, scroll
-                if length >= frame.width:
-                    for x in range(length + frame.width + 10):
-                        txtImg = music.get_text(frame.width - x, frame.height - 22, textColor)
-                        frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
-                        await asyncio.sleep(0.0125)
-                    await asyncio.sleep(1.5)
+            if is_new_song:
+                print("%s: now playing song: %s" % ("chromecast" if music.chromecast_songinfo else "spotify", music.nowplaying()["track"]))
 
-                # If all the text fits, don't scroll.
-                else:
-                    if music.new_song():
-                        for x in range(127):
-                            # Add an alpha channel to the color for fading in
-                            textColorFade = textColor + (x * 2,)
-                            txtImg = music.get_text(0, frame.height - 22, textColorFade)
-                            frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
+            # Length of the longest line of text, in pixels.
+            length = music.get_text_length()
 
-                    txtImg = music.get_text(0, frame.height - 22, textColor)
+            draw = ImageDraw.Draw(canvas)
+            if is_new_song or length >= frame.width:
+                for x in range(127):
+                    # Add an alpha channel to the color for fading in
+                    textColorFade = textColor + (x * 2,)
+                    txtImg = music.get_text(0, frame.height - 22, textColorFade, dropshadow=None)
                     frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
-            except:
-                # This is because if you pause while the text is scrolling, it crashes. :(
-                pass
 
-        # Nothing is playing
-        else:
-            frame.swap(weather.image().convert('RGB'))
+            time.sleep(1.0)
 
-        await asyncio.sleep(0)
+            # If either line of text is longer than the display, scroll
+            if length >= frame.width:
+                for x in range(length + 10):
+                    txtImg = music.get_text(0 - x, frame.height - 22, textColor, dropshadow=(1,0))
+                    frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
+                    time.sleep(0.0125)
+            else:
+                txtImg = music.get_text(0, frame.height - 22, textColor, dropshadow=(1,0))
+                frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
+
+        except AttributeError as err:
+            # This is because if you pause while the text is scrolling, it crashes. :(
+            print(err)
+
+    # Nothing is playing
+    else:
+        frame.swap(weather.image().convert('RGB'))
+    return 0
 
 async def update_weather():
     while True:
@@ -568,12 +576,17 @@ async def update_spotify():
         delay = music.get_playing_spotify()
         await asyncio.sleep(delay)
 
+async def update_main():
+    while True:
+        delay = main()
+        await asyncio.sleep(delay)
+
 async def metamain():
     L = await asyncio.gather(
         update_weather(),
         update_chromecast(),
         update_spotify(),
-        main()
+        update_main()
     )
     print(L)
 
