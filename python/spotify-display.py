@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from hsluv import hsluv_to_rgb, hpluv_to_rgb
 import math
 import asyncio
 import colorsys
@@ -71,11 +72,6 @@ class Frame:
         self.options.hardware_mapping = "adafruit-hat-pwm"
         self.options.rows = int(config["matrix"]["height"])
         self.options.cols = int(config["matrix"]["width"])
-        # self.options.disable_hardware_pulsing = False
-        # self.options.pwm_dither_bits = 1
-        # self.options.pwm_lsb_nanoseconds = 50
-        # self.options.pwm_bits = 8
-        # self.options.gpio_slowdown = 3
 
         self.matrix = RGBMatrix(options=self.options)
         self.offscreen_canvas = self.matrix.CreateFrameCanvas()
@@ -84,7 +80,8 @@ class Frame:
     
     def gamma(value):
         if weather.night():
-            return round(pow(value / 255.0, 1.5) * 128.0)
+            return value
+            # return round(pow(value / 255.0, 1.0) * 255.0)
         else:
             return round(pow(value / 255.0, 1.5) * 255.0)
 
@@ -257,18 +254,20 @@ class Weather:
         txtImg = getTextImage([
                             (self.temp(),       (1, -1), ttfFontLg,  (192, 192, 128)),
                             (self.humidity(),   (1, 12), ttfFontSm, (128, 192, 128)),
-                            (self.wind_speed(), (1, 18), ttfFontSm, (128, 192, 192)),
-                            (self.pressure(),   (1, 24), ttfFontSm, (128, 128, 128)),
+                            (self.wind_speed(), (1, 19), ttfFontSm, (128, 192, 192)),
+                            (self.pressure(),   (1, 26), ttfFontSm, (128, 128, 128)),
                             ],
                             textColor)
 
         def hsv2rgb(h,s,v):
-                return tuple(int(i * 256) for i in colorsys.hsv_to_rgb(h,s,v))
+            return tuple(int(i * 256) for i in hpluv_to_rgb([h * 360.0, s * 100.0 , v * 100.0]))
+            # return tuple(int(i * 256) for i in colorsys.hsv_to_rgb(h,s,v))
 
         ts = datetime.now().timestamp()
 
-        draw.rectangle([(0,37), (63,63)],
-                fill=hsv2rgb((ts % 100.0) / 100.0, 1.0, 0.25))
+        cycle_time = 120.0
+
+        draw.rectangle([(2,40), (61,61)], fill=hsv2rgb((ts % cycle_time) / cycle_time, 1.0, 0.25))
 
         t_width = ttfFontTime.getsize(mytime)[0]
         t_height = ttfFontTime.getsize(mytime)[1]
@@ -276,23 +275,22 @@ class Weather:
         x_shadow = 2.0 * math.cos(math.radians((ts) % 360.0))
         y_shadow = 2.0 * math.sin(math.radians((ts) % 360.0))
 
-        # Fuzzy drop shadow
         timeImg = getTextImage([ (
                              mytime,
-                             (34.0 - (t_width / 2) + x_shadow, 50.0 - (t_height / 2) + y_shadow),
+                             (34.0 - (t_width / 2) + 1, 49.0 - (t_height / 2) + 1),
                              ttfFontTime,
-                             (0,0,0,192),
+                             hsv2rgb((ts % cycle_time) / cycle_time, 1.0, 0.10),
                              ) ],
                             textColor, fontmode=None, dropshadow=None)
         canvas = Image.alpha_composite(canvas, timeImg)
 
         timeImg = getTextImage([ (
                              mytime,
-                             (32 - (t_width >> 1), 48 - (t_height >> 1)),
+                             (32 - (t_width >> 1), 47 - (t_height >> 1)),
                              ttfFontTime,
-                             hsv2rgb((ts % 30.0) / 30.0, 0.5, 0.75),
+                             hsv2rgb((ts % cycle_time) / cycle_time, 0.5, 0.75),
                              ) ],
-                            textColor, fontmode="1", dropshadow=None)
+                            textColor, fontmode=None, dropshadow=None)
 
         canvas = Image.alpha_composite(canvas, timeImg)
 
@@ -473,6 +471,9 @@ class Music:
             with urllib.request.urlopen(url) as rawimage:
                 image = ImageOps.pad(Image.open(rawimage), size=(64,64), method=Image.LANCZOS, centering=(1,0))
                 image.save(processed, "PNG")
+
+        if weather.night():
+            image = ImageEnhance.Brightness(image).enhance(0.75)
 
         if frame.height < 64:
             cover = Image.new('RGBA', (64, 64), (0,0,0))
