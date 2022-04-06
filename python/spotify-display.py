@@ -89,7 +89,7 @@ class Frame:
             return value
             # return round(pow(value / 255.0, 1.0) * 255.0)
         else:
-            return round(pow(value / 255.0, 1.5) * 255.0)
+            return round(pow(value / 255.0, 1.25) * 255.0)
 
     def swap(self, canvas):
         canvas = Image.eval(canvas, Frame.gamma)
@@ -253,7 +253,7 @@ class Weather:
         for m in range(32):
             try: # one time the payload didn't include minutely data...
                 rain = self._payload["minutely"][2 * m]["precipitation"] + self._payload["minutely"][2 * m + 1]["precipitation"]
-                if rain > 0:
+                if rain > 0.0:
                     draw.point((m, 0), fill=hsluv2rgb(255.0, 100.0, 50.0))
             except (KeyError, IndexError):
                 pass
@@ -264,7 +264,7 @@ class Weather:
                             (self.temp(),       (0, -1), ttfFontLg, hsluv2rgb(69.0, 75.0, 75.0)),
                             (self.humidity(),   (0, 11), ttfFontSm, hsluv2rgb(139.9, 75.0, 50.0)),
                             (self.wind_speed(), (0, 17), ttfFontSm, hsluv2rgb(183.8, 75.0, 50.0)),
-                            (self.pressure(),   (0, 24), ttfFontSm, hsluv2rgb(128.0, 0.0, 50.0)),
+                            (self.pressure(),   (0, 23), ttfFontSm, hsluv2rgb(128.0, 0.0, 50.0)),
                             ],
                             textColor, dropshadow=None)
 
