@@ -65,6 +65,12 @@ weatherFont = ImageFont.truetype("%s/weathericons-regular-webfont.ttf" % basepat
 # logging.basicConfig(filename='/tmp/spotify-matrix.log',level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def hpluv2rgb(h,s,v):
+    return tuple(int(i * 256) for i in hpluv_to_rgb([h, s , v]))
+
+def hsluv2rgb(h,s,v):
+    return tuple(int(i * 256) for i in hsluv_to_rgb([h, s , v]))
+
 class Frame:
     def __init__(self):
         self.options = RGBMatrixOptions()
@@ -134,7 +140,7 @@ class Weather:
         if time.localtime()[3] <= 5:
             return 60 * 30
         else:
-            return 60 * 5
+            return 60 * 10
 
     def night(self):
         if self._now["dt"] > (self._now["sunset"] + 1080) or self._now["dt"] < (self._now["sunrise"] - 1080):
@@ -219,19 +225,24 @@ class Weather:
         for x in range(24):
             t = time.localtime(self.hour(x+1)["dt"])
             if t[3] == 0:
-                draw.line([(26, x+4), (28, x+4)], fill=(64, 64, 64))
+                draw.line([(28, x+4), (30, x+4)], fill=hsluv2rgb(128.0,0.0,25.0))
             if t[3] in [6, 18]:
-                draw.line([(27, x+4), (29, x+4)], fill=(64, 64, 64))
+                draw.line([(29, x+4), (31, x+4)], fill=hsluv2rgb(128.0,0.0,25.0))
             if t[3] == 12:
-                draw.line([(28, x+4), (30, x+4)], fill=(64, 64, 64))
+                draw.line([(30, x+4), (32, x+4)], fill=hsluv2rgb(128.0,0.0,25.0))
 
             diff = self.hour(x)["temp"] - self.hour(0)["temp"]
             if diff > 1.0:
-                draw.point((28, x+4), fill=(128, 96, 16))
+                draw.point((30, x+4), fill=hsluv2rgb(17.5, 100.0, 25.0))
             elif diff < -1.0:
-                draw.point((28, x+4), fill=(32, 32, 192))
+                draw.point((30, x+4), fill=hsluv2rgb(231.0, 100.0, 25.0))
             else:
-                draw.point((28, x+4), fill=(64, 64, 64))
+                draw.point((30, x+4), fill=hsluv2rgb(128.0, 0.0, 25.0))
+            try:
+                if self.hour(x)["rain"]['1h'] > 0.0:
+                    draw.point((31, x+4), fill=hsluv2rgb(255.0, 100.0, 50.0))
+            except KeyError:
+                pass
 
         iconImage = self.icon()
         # We're replaceing the entire right side of
@@ -239,25 +250,23 @@ class Weather:
         canvas.paste(iconImage, (32, 6))
 
         # A little indicator of rain in the next hour. Each pixel represents two minutes.
-        for m in range(30):
+        for m in range(32):
             try: # one time the payload didn't include minutely data...
                 rain = self._payload["minutely"][2 * m]["precipitation"] + self._payload["minutely"][2 * m + 1]["precipitation"]
                 if rain > 0:
-                    draw.point((m + 1, 0), fill=(128,128,255))
-                else:
-                    draw.point((m + 1, 0), fill=(32,32,32))
+                    draw.point((m, 0), fill=hsluv2rgb(255.0, 100.0, 50.0))
             except (KeyError, IndexError):
-                draw.point((m + 1, 0), fill=(8, 8, 8))
+                pass
 
         mytime=datetime.now().strftime("%-I:%M")
 
         txtImg = getTextImage([
-                            (self.temp(),       (1, -1), ttfFontLg,  (192, 192, 128)),
-                            (self.humidity(),   (1, 12), ttfFontSm, (128, 192, 128)),
-                            (self.wind_speed(), (1, 19), ttfFontSm, (128, 192, 192)),
-                            (self.pressure(),   (1, 26), ttfFontSm, (128, 128, 128)),
+                            (self.temp(),       (0, -1), ttfFontLg, hsluv2rgb(69.0, 75.0, 75.0)),
+                            (self.humidity(),   (0, 11), ttfFontSm, hsluv2rgb(139.9, 75.0, 50.0)),
+                            (self.wind_speed(), (0, 17), ttfFontSm, hsluv2rgb(183.8, 75.0, 50.0)),
+                            (self.pressure(),   (0, 24), ttfFontSm, hsluv2rgb(128.0, 0.0, 50.0)),
                             ],
-                            textColor)
+                            textColor, dropshadow=None)
 
         def hsv2rgb(h,s,v):
             return tuple(int(i * 256) for i in hpluv_to_rgb([h * 360.0, s * 100.0 , v * 100.0]))
