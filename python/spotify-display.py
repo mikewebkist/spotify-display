@@ -62,7 +62,7 @@ ttfFontTime = getFont(config["fonts"]["time"])
 
 weatherFont = ImageFont.truetype("%s/weathericons-regular-webfont.ttf" % basepath, 20)
 
-# logging.basicConfig(filename='/tmp/spotify-matrix.log',level=logging.INFO)
+logging.basicConfig(filename='/tmp/spotify-matrix.log',level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def hpluv2rgb(h,s,v):
@@ -367,10 +367,10 @@ class Music:
                 timeleft = round((obj["spotify_duration"] - obj["spotify_progress"]) / 1000.0) 
                 if timeleft > 120.0:
                     return 60.0
-                if timeleft > 20.0:
-                    return timeleft / 2.0
-                else:
+                elif timeleft > 5.0:
                     return timeleft
+                else:
+                    return 5.0
             else:
                 self.spotify_songinfo = None
                 return 60.0
@@ -417,6 +417,8 @@ class Music:
                     return 10.0
                 elif cast.media_controller.status.duration:
                     timeleft = round((cast.media_controller.status.duration - cast.media_controller.status.adjusted_current_time))
+                    print(timeleft)
+
                     if timeleft > 10.0:
                         return 10.0
                     else:
