@@ -93,13 +93,13 @@ class Frame:
 
     def swap(self, canvas):
         canvas = Image.eval(canvas, Frame.gamma)
-        self.offscreen_canvas.SetImage(canvas, 0, 0)
+        self.offscreen_canvas.SetImage(canvas, 0, -32)
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
-def getTextImage(texts, textColor=(192,192,192), fontmode="1", dropshadow=(1,1)):
+def getTextImage(texts):
     txtImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
     draw = ImageDraw.Draw(txtImg)
-    draw.fontmode = fontmode
+    draw.fontmode = "1"
     for text, position, *font in texts:
         if font:
             lineFont = font[0]
@@ -108,8 +108,6 @@ def getTextImage(texts, textColor=(192,192,192), fontmode="1", dropshadow=(1,1))
             lineFont = ttfFont
             lineColor = textColor
         (x, y) = position
-        if dropshadow:
-            draw.text((x + dropshadow[0], y + dropshadow[1]), text, (0,0,0), font=lineFont)
         draw.text((x, y), text, lineColor,   font=lineFont)
     return txtImg
 
@@ -216,6 +214,24 @@ class Weather:
     def pressure(self):
         return "%.1f\"" % (self._payload["current"]["pressure"] * 0.0295301)
 
+    def layout_text(self, lines):
+        height = 0
+        width = 0
+        for text, color, font in lines:
+            wh = font.getsize(text)
+            width = max(width, wh[0])
+            height = height + wh[1]
+
+        txtImg = Image.new('RGBA', (width + 1, height + 1), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(txtImg)
+        draw.fontmode = "1"
+        y_pos = -1
+        for text, color, font in lines:
+            draw.text((1, y_pos + 1), text, (0,0,0), font=font)
+            draw.text((0, y_pos),     text, color,   font=font)
+            y_pos = y_pos + font.getsize(text)[1] - 1
+        return txtImg
+
     def image(self):
         canvas = Image.new('RGBA', (64, 64), (0, 0, 0))
         draw = ImageDraw.Draw(canvas)
@@ -258,23 +274,18 @@ class Weather:
 
         mytime=datetime.now().strftime("%-I:%M")
 
-        txtImg = getTextImage([
-                            (self.temp(),       (0, -1), ttfFontLg, hsluv2rgb(69.0, 75.0, 75.0)),
-                            (self.humidity(),   (0, 11), ttfFontSm, hsluv2rgb(139.9, 75.0, 50.0)),
-                            (self.wind_speed(), (0, 17), ttfFontSm, hsluv2rgb(183.8, 75.0, 50.0)),
-                            (self.pressure(),   (0, 23), ttfFontSm, hsluv2rgb(128.0, 0.0, 50.0)),
-                            ],
-                            dropshadow=None)
+        txtImg = self.layout_text([ (self.temp(),       hsluv2rgb(69.0, 75.0, 75.0),  ttfFontLg),
+                                    (self.humidity(),   hsluv2rgb(139.9, 75.0, 50.0), ttfFontSm),
+                                    (self.wind_speed(), hsluv2rgb(183.8, 75.0, 50.0), ttfFontSm),
+                                    (self.pressure(),   hsluv2rgb(128.0, 0.0, 50.0),  ttfFontSm) ])
 
-        def hsv2rgb(h,s,v):
-            return tuple(int(i * 256) for i in hpluv_to_rgb([h * 360.0, s * 100.0 , v * 100.0]))
-            # return tuple(int(i * 256) for i in colorsys.hsv_to_rgb(h,s,v))
+        canvas.alpha_composite(txtImg, dest=(0, 0))
 
         ts = datetime.now().timestamp()
 
         cycle_time = 120.0
 
-        draw.rectangle([(2,40), (61,61)], fill=hsv2rgb((ts % cycle_time) / cycle_time, 1.0, 0.25))
+        draw.rectangle([(2,40), (61,61)], fill=hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 25))
 
         t_width = ttfFontTime.getsize(mytime)[0]
         t_height = ttfFontTime.getsize(mytime)[1]
@@ -284,24 +295,22 @@ class Weather:
 
         timeImg = getTextImage([ (
                              mytime,
-                             (34.0 - (t_width / 2) + 1, 49.0 - (t_height / 2) + 1),
+                             (32 - (t_width >> 1) + 1, 48 - (t_height >> 1) + 1),
                              ttfFontTime,
-                             hsv2rgb((ts % cycle_time) / cycle_time, 1.0, 0.10),
-                             ) ],
-                            fontmode=None, dropshadow=None)
+                             hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 10),
+                             ) ])
         canvas = Image.alpha_composite(canvas, timeImg)
 
         timeImg = getTextImage([ (
                              mytime,
-                             (32 - (t_width >> 1), 47 - (t_height >> 1)),
+                             (32 - (t_width >> 1), 48 - (t_height >> 1)),
                              ttfFontTime,
-                             hsv2rgb((ts % cycle_time) / cycle_time, 0.5, 0.75),
-                             ) ],
-                            fontmode=None, dropshadow=None)
+                             hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 50, 75),
+                             ) ])
 
         canvas = Image.alpha_composite(canvas, timeImg)
 
-        return Image.alpha_composite(canvas, txtImg).convert('RGB')
+        return canvas.convert('RGB')
 
 class Music:
     def __init__(self):
@@ -428,6 +437,9 @@ class Music:
         else:
             self.chromecast_songinfo = None
 
+            if self.spotify_songinfo:
+                return 10.0
+
         return 2.0
 
     def new_album(self):
@@ -533,50 +545,44 @@ async def main():
     while True:
         # We have a playing track.
         if music.nowplaying():
-            try:
-                canvas = music.canvas()
+            canvas = music.canvas()
 
-                is_new_song = music.new_song()
+            is_new_song = music.new_song()
 
-                # Fade in new album covers
-                if music.new_album():
-                    print("%s: now playing album: %s" % ("chromecast" if music.chromecast_songinfo else "spotify", music.nowplaying()["album"]))
-                    for x in range(127):
-                        frame.swap(ImageEnhance.Brightness(canvas).enhance(x * 2 / 255.0).convert('RGB'))
-                    await asyncio.sleep(0)
+            # Fade in new album covers
+            if music.new_album():
+                print("%s: now playing album: %s" % ("chromecast" if music.chromecast_songinfo else "spotify", music.nowplaying()["album"]))
+                for x in range(127):
+                    frame.swap(ImageEnhance.Brightness(canvas).enhance(x * 2 / 255.0).convert('RGB'))
+                await asyncio.sleep(0)
 
-                if is_new_song:
-                    print("%s: now playing song: %s" % ("chromecast" if music.chromecast_songinfo else "spotify", music.nowplaying()["track"]))
+            if is_new_song:
+                print("%s: now playing song: %s" % ("chromecast" if music.chromecast_songinfo else "spotify", music.nowplaying()["track"]))
 
-                # Length of the longest line of text, in pixels.
+            # Build the song info once per cycle. Could just cache it on album change, but meh.
+            txtImg = music.get_text()
 
-                txtImg = music.get_text()
-
-                if is_new_song or txtImg.width >= frame.width:
-                    for x in range(127):
-                        bg = canvas.copy()
-                        fg = ImageEnhance.Brightness(txtImg).enhance(x * 2 / 256.0)
-                        bg.alpha_composite(fg, dest=(0, frame.height - txtImg.height))
-                        frame.swap(bg.convert('RGB'))
-
-                await asyncio.sleep(1.0)
-
-                # If either line of text is longer than the display, scroll
-                if txtImg.width >= frame.width:
-                    for x in range(txtImg.width + 10):
-                        bg = canvas.copy()
-                        bg.alpha_composite(txtImg, dest=(0 - x, frame.height - txtImg.height))
-                        frame.swap(bg.convert('RGB'))
-                        await asyncio.sleep(0.0125)
-                    await asyncio.sleep(1.0)
-                else:
+            if is_new_song or txtImg.width >= frame.width:
+                for x in range(127):
                     bg = canvas.copy()
-                    bg.alpha_composite(txtImg, dest=(0, frame.height - txtImg.height))
+                    fg = ImageEnhance.Brightness(txtImg).enhance(x * 2 / 256.0)
+                    bg.alpha_composite(fg, dest=(0, frame.height - txtImg.height))
                     frame.swap(bg.convert('RGB'))
 
-            except AttributeError as err:
-                # This is because if you pause while the text is scrolling, it crashes. :(
-                print(err)
+            await asyncio.sleep(1.0)
+
+            # If either line of text is longer than the display, scroll
+            if txtImg.width >= frame.width:
+                for x in range(txtImg.width + 10):
+                    bg = canvas.copy()
+                    bg.alpha_composite(txtImg, dest=(0 - x, frame.height - txtImg.height))
+                    frame.swap(bg.convert('RGB'))
+                    await asyncio.sleep(0.0125)
+                await asyncio.sleep(1.0)
+            else:
+                bg = canvas.copy()
+                bg.alpha_composite(txtImg, dest=(0, frame.height - txtImg.height))
+                frame.swap(bg.convert('RGB'))
 
         # Nothing is playing
         else:
@@ -597,7 +603,7 @@ async def update_chromecast():
         t1 = time.perf_counter()
         delay = music.get_playing_chromecast()
         td = time.perf_counter() - t1
-        print(f"chromecast took {td:.4f} secs. re-run in {delay:.1f} secs")
+        # print(f"chromecast took {td:.4f} secs. re-run in {delay:.1f} secs")
         await asyncio.sleep(delay)
 
 async def update_spotify():
