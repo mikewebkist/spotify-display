@@ -99,7 +99,7 @@ class Frame:
 def getTextImage(texts):
     txtImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
     draw = ImageDraw.Draw(txtImg)
-    draw.fontmode = "1"
+    draw.fontmode = None
     for text, position, *font in texts:
         if font:
             lineFont = font[0]
@@ -350,7 +350,7 @@ class Music:
 
     def get_playing_spotify(self):
         if self.chromecast_songinfo:
-            return 47.0
+            return 60.0
 
         try:
             meta = self._spotify.current_user_playing_track()
@@ -382,14 +382,14 @@ class Music:
                     return 1.0
             else:
                 self.spotify_songinfo = None
-                return 47.0
+                return 60.0
 
         except (spotipy.exceptions.SpotifyException,
                 spotipy.oauth2.SpotifyOauthError) as err:
             logger.error("Spotify error getting current_user_playing_track:")
             logger.error(err)
             self.spotify_songinfo = None
-            return 47.0 * 5.0
+            return 60.0 * 5.0
 
         except (requests.exceptions.ReadTimeout,
                 requests.exceptions.ConnectionError,
@@ -397,10 +397,10 @@ class Music:
             logger.error("Protocol problem getting current_user_playing_track")
             logger.error(err)
             self.spotify_songinfo = None
-            return 47.0
+            return 60.0
 
         # Just in case
-        return 47.0
+        return 60.0
 
     def get_playing_chromecast(self):
         for cast in self.chromecasts:
