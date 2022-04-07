@@ -96,7 +96,7 @@ class Frame:
         self.offscreen_canvas.SetImage(canvas, 0, 0)
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
-def getTextImage(texts, color, fontmode="1", dropshadow=(1,1)):
+def getTextImage(texts, textColor=(192,192,192), fontmode="1", dropshadow=(1,1)):
     txtImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
     draw = ImageDraw.Draw(txtImg)
     draw.fontmode = fontmode
@@ -106,14 +106,12 @@ def getTextImage(texts, color, fontmode="1", dropshadow=(1,1)):
             lineColor = font[1]
         else:
             lineFont = ttfFont
-            lineColor = color
+            lineColor = textColor
         (x, y) = position
         if dropshadow:
             draw.text((x + dropshadow[0], y + dropshadow[1]), text, (0,0,0), font=lineFont)
         draw.text((x, y), text, lineColor,   font=lineFont)
     return txtImg
-
-textColor = (192, 192, 192)
 
 def ktof(k):
     return (k - 273.15) * 1.8 + 32.0
@@ -266,7 +264,7 @@ class Weather:
                             (self.wind_speed(), (0, 17), ttfFontSm, hsluv2rgb(183.8, 75.0, 50.0)),
                             (self.pressure(),   (0, 23), ttfFontSm, hsluv2rgb(128.0, 0.0, 50.0)),
                             ],
-                            textColor, dropshadow=None)
+                            dropshadow=None)
 
         def hsv2rgb(h,s,v):
             return tuple(int(i * 256) for i in hpluv_to_rgb([h * 360.0, s * 100.0 , v * 100.0]))
@@ -290,7 +288,7 @@ class Weather:
                              ttfFontTime,
                              hsv2rgb((ts % cycle_time) / cycle_time, 1.0, 0.10),
                              ) ],
-                            textColor, fontmode=None, dropshadow=None)
+                            fontmode=None, dropshadow=None)
         canvas = Image.alpha_composite(canvas, timeImg)
 
         timeImg = getTextImage([ (
@@ -299,7 +297,7 @@ class Weather:
                              ttfFontTime,
                              hsv2rgb((ts % cycle_time) / cycle_time, 0.5, 0.75),
                              ) ],
-                            textColor, fontmode=None, dropshadow=None)
+                            fontmode=None, dropshadow=None)
 
         canvas = Image.alpha_composite(canvas, timeImg)
 
@@ -365,6 +363,8 @@ class Music:
 
                 self.spotify_songinfo = obj
                 timeleft = round((obj["spotify_duration"] - obj["spotify_progress"]) / 1000.0) 
+                if (obj["spotify_progress"] / 1000.0) < 60.0:
+                    return (obj["spotify_progress"] / 1000.0)
                 if timeleft > 120.0:
                     return 60.0
                 elif timeleft > 5.0:
@@ -497,9 +497,9 @@ class Music:
         canvas.paste(self.album_image(), (0, 0))
 
         if weather.steamy():
-            canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 128, 64)),], textColor))
+            canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 128, 64)),]))
         elif weather.icy():
-            canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 148, 196)),], textColor))
+            canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 148, 196)),]))
 
         return canvas
 
@@ -509,18 +509,32 @@ class Music:
         else:
             return max(ttfFont.getsize(self.nowplaying()["track"])[0], ttfFont.getsize(self.nowplaying()["artist"])[0])
 
-    def get_text(self, x, y, textColor, dropshadow=(1,1)):
+    def layout_text(self, lines):
+        height = 0
+        width = 0
+        for line in lines:
+            wh = ttfFont.getsize(line)
+            width = max(width, wh[0])
+            height = height + wh[1]
+
+        txtImg = Image.new('RGBA', (width + 1, height + 1), (255, 255, 255, 0))
+        draw = ImageDraw.Draw(txtImg)
+        draw.fontmode = "1"
+        y_pos = 0
+        for line in lines:
+            draw.text((1, y_pos + 1), line, (0,0,0), font=ttfFont)
+            draw.text((0, y_pos), line, (192, 192, 192), font=ttfFont)
+            y_pos = y_pos + ttfFont.getsize(line)[1]
+        return txtImg
+
+    def get_text(self,textColor=(192,192,192, 255)):
         if self.album_art() == None:
-            return getTextImage([
-                (self.nowplaying()["track"], (x, y - 10)),
-                (self.nowplaying()["album"], (x, y)),
-                (self.nowplaying()["artist"], (x, y + 10))
-                ], textColor, dropshadow=dropshadow)
+            return self.layout_text([self.nowplaying()["track"],
+                                     self.nowplaying()["album"],
+                                     self.nowplaying()["artist"]])
         else:
-            return getTextImage([
-                (self.nowplaying()["track"], (x, y)),
-                (self.nowplaying()["artist"], (x, y + 10))
-                ], textColor, dropshadow=dropshadow)
+            return self.layout_text([self.nowplaying()["track"],
+                                     self.nowplaying()["artist"]])
 
 def main():
     # We have a playing track.
@@ -535,33 +549,35 @@ def main():
                 print("%s: now playing album: %s" % ("chromecast" if music.chromecast_songinfo else "spotify", music.nowplaying()["album"]))
                 for x in range(127):
                     frame.swap(ImageEnhance.Brightness(canvas).enhance(x * 2 / 255.0).convert('RGB'))
-                    # time.sleep(0.0125)
 
             if is_new_song:
                 print("%s: now playing song: %s" % ("chromecast" if music.chromecast_songinfo else "spotify", music.nowplaying()["track"]))
 
             # Length of the longest line of text, in pixels.
-            length = music.get_text_length()
 
-            draw = ImageDraw.Draw(canvas)
-            if is_new_song or length >= frame.width:
+            txtImg = music.get_text()
+
+            if is_new_song or txtImg.width >= frame.width:
                 for x in range(127):
-                    # Add an alpha channel to the color for fading in
-                    textColorFade = textColor + (x * 2,)
-                    txtImg = music.get_text(0, frame.height - 22, textColorFade, dropshadow=(1,1))
-                    frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
+                    bg = canvas.copy()
+                    fg = ImageEnhance.Brightness(txtImg).enhance(x * 2 / 256.0)
+                    bg.alpha_composite(fg, dest=(0, frame.height - txtImg.height))
+                    frame.swap(bg.convert('RGB'))
 
             time.sleep(1.0)
 
             # If either line of text is longer than the display, scroll
-            if length >= frame.width:
-                for x in range(length + 10):
-                    txtImg = music.get_text(0 - x, frame.height - 22, textColor, dropshadow=(1,1))
-                    frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
+            if txtImg.width >= frame.width:
+                for x in range(txtImg.width + 10):
+                    bg = canvas.copy()
+                    bg.alpha_composite(txtImg, dest=(0 - x, frame.height - txtImg.height))
+                    frame.swap(bg.convert('RGB'))
                     time.sleep(0.0125)
+                time.sleep(1.0)
             else:
-                txtImg = music.get_text(0, frame.height - 22, textColor, dropshadow=(1,1))
-                frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
+                bg = canvas.copy()
+                bg.alpha_composite(txtImg, dest=(0, frame.height - txtImg.height))
+                frame.swap(bg.convert('RGB'))
 
         except AttributeError as err:
             # This is because if you pause while the text is scrolling, it crashes. :(
