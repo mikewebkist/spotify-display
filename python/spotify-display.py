@@ -341,7 +341,7 @@ class Music:
 
     def get_playing_spotify(self):
         if self.chromecast_songinfo:
-            return 60.0
+            return 47.0
 
         try:
             meta = self._spotify.current_user_playing_track()
@@ -363,24 +363,24 @@ class Music:
 
                 self.spotify_songinfo = obj
                 timeleft = round((obj["spotify_duration"] - obj["spotify_progress"]) / 1000.0) 
-                if (obj["spotify_progress"] / 1000.0) < 60.0:
-                    return (obj["spotify_progress"] / 1000.0)
-                if timeleft > 120.0:
-                    return 60.0
+                if (obj["spotify_progress"] / 1000.0) < 15.0:
+                    return 1.0
+                elif timeleft > 30.0:
+                    return 30.0
                 elif timeleft > 5.0:
                     return timeleft
                 else:
-                    return 5.0
+                    return 1.0
             else:
                 self.spotify_songinfo = None
-                return 60.0
+                return 47.0
 
         except (spotipy.exceptions.SpotifyException,
                 spotipy.oauth2.SpotifyOauthError) as err:
             logger.error("Spotify error getting current_user_playing_track:")
             logger.error(err)
             self.spotify_songinfo = None
-            return 60.0 * 5.0
+            return 47.0 * 5.0
 
         except (requests.exceptions.ReadTimeout,
                 requests.exceptions.ConnectionError,
@@ -388,15 +388,14 @@ class Music:
             logger.error("Protocol problem getting current_user_playing_track")
             logger.error(err)
             self.spotify_songinfo = None
-            return 60.0
+            return 47.0
 
         # Just in case
-        return 60.0
+        return 47.0
 
     def get_playing_chromecast(self):
         for cast in self.chromecasts:
-            # print("Before: %.3f" % time.perf_counter())
-            cast.wait()
+            # cast.wait()
             if cast.media_controller.status.player_is_playing:
                 meta = cast.media_controller.status.media_metadata
                 obj = {
@@ -503,12 +502,6 @@ class Music:
 
         return canvas
 
-    def get_text_length(self):
-        if self.album_art() == None:
-            return max(ttfFont.getsize(self.nowplaying()["track"])[0], ttfFont.getsize(self.nowplaying()["album"])[0], ttfFont.getsize(self.nowplaying()["artist"])[0])
-        else:
-            return max(ttfFont.getsize(self.nowplaying()["track"])[0], ttfFont.getsize(self.nowplaying()["artist"])[0])
-
     def layout_text(self, lines):
         height = 0
         width = 0
@@ -536,88 +529,92 @@ class Music:
             return self.layout_text([self.nowplaying()["track"],
                                      self.nowplaying()["artist"]])
 
-def main():
-    # We have a playing track.
-    if music.nowplaying():
-        try:
-            canvas = music.canvas()
+async def main():
+    while True:
+        # We have a playing track.
+        if music.nowplaying():
+            try:
+                canvas = music.canvas()
 
-            is_new_song = music.new_song()
+                is_new_song = music.new_song()
 
-            # Fade in new album covers
-            if music.new_album():
-                print("%s: now playing album: %s" % ("chromecast" if music.chromecast_songinfo else "spotify", music.nowplaying()["album"]))
-                for x in range(127):
-                    frame.swap(ImageEnhance.Brightness(canvas).enhance(x * 2 / 255.0).convert('RGB'))
+                # Fade in new album covers
+                if music.new_album():
+                    print("%s: now playing album: %s" % ("chromecast" if music.chromecast_songinfo else "spotify", music.nowplaying()["album"]))
+                    for x in range(127):
+                        frame.swap(ImageEnhance.Brightness(canvas).enhance(x * 2 / 255.0).convert('RGB'))
+                    await asyncio.sleep(0)
 
-            if is_new_song:
-                print("%s: now playing song: %s" % ("chromecast" if music.chromecast_songinfo else "spotify", music.nowplaying()["track"]))
+                if is_new_song:
+                    print("%s: now playing song: %s" % ("chromecast" if music.chromecast_songinfo else "spotify", music.nowplaying()["track"]))
 
-            # Length of the longest line of text, in pixels.
+                # Length of the longest line of text, in pixels.
 
-            txtImg = music.get_text()
+                txtImg = music.get_text()
 
-            if is_new_song or txtImg.width >= frame.width:
-                for x in range(127):
+                if is_new_song or txtImg.width >= frame.width:
+                    for x in range(127):
+                        bg = canvas.copy()
+                        fg = ImageEnhance.Brightness(txtImg).enhance(x * 2 / 256.0)
+                        bg.alpha_composite(fg, dest=(0, frame.height - txtImg.height))
+                        frame.swap(bg.convert('RGB'))
+
+                await asyncio.sleep(1.0)
+
+                # If either line of text is longer than the display, scroll
+                if txtImg.width >= frame.width:
+                    for x in range(txtImg.width + 10):
+                        bg = canvas.copy()
+                        bg.alpha_composite(txtImg, dest=(0 - x, frame.height - txtImg.height))
+                        frame.swap(bg.convert('RGB'))
+                        await asyncio.sleep(0.0125)
+                    await asyncio.sleep(1.0)
+                else:
                     bg = canvas.copy()
-                    fg = ImageEnhance.Brightness(txtImg).enhance(x * 2 / 256.0)
-                    bg.alpha_composite(fg, dest=(0, frame.height - txtImg.height))
+                    bg.alpha_composite(txtImg, dest=(0, frame.height - txtImg.height))
                     frame.swap(bg.convert('RGB'))
 
-            time.sleep(1.0)
+            except AttributeError as err:
+                # This is because if you pause while the text is scrolling, it crashes. :(
+                print(err)
 
-            # If either line of text is longer than the display, scroll
-            if txtImg.width >= frame.width:
-                for x in range(txtImg.width + 10):
-                    bg = canvas.copy()
-                    bg.alpha_composite(txtImg, dest=(0 - x, frame.height - txtImg.height))
-                    frame.swap(bg.convert('RGB'))
-                    time.sleep(0.0125)
-                time.sleep(1.0)
-            else:
-                bg = canvas.copy()
-                bg.alpha_composite(txtImg, dest=(0, frame.height - txtImg.height))
-                frame.swap(bg.convert('RGB'))
+        # Nothing is playing
+        else:
+            frame.swap(weather.image().convert('RGB'))
 
-        except AttributeError as err:
-            # This is because if you pause while the text is scrolling, it crashes. :(
-            print(err)
-
-    # Nothing is playing
-    else:
-        frame.swap(weather.image().convert('RGB'))
-    return 0
+        await asyncio.sleep(0)
 
 async def update_weather():
     while True:
+        t1 = time.perf_counter()
         delay = weather._update()
+        td = time.perf_counter() - t1
+        print(f"weather took {td:.4f} secs. re-run in {delay:.1f} secs")
         await asyncio.sleep(delay)
 
 async def update_chromecast():
     while True:
+        t1 = time.perf_counter()
         delay = music.get_playing_chromecast()
-        # print(f"chromecast {delay:.1f}secs")
+        td = time.perf_counter() - t1
+        print(f"chromecast took {td:.4f} secs. re-run in {delay:.1f} secs")
         await asyncio.sleep(delay)
 
 async def update_spotify():
     while True:
+        t1 = time.perf_counter()
         delay = music.get_playing_spotify()
-        # print(f"spotify {delay:.1f}secs")
-        await asyncio.sleep(delay)
-
-async def update_main():
-    while True:
-        delay = main()
+        td = time.perf_counter() - t1
+        print(f"spotify took {td:.4f} secs. re-run in {delay:.1f} secs")
         await asyncio.sleep(delay)
 
 async def metamain():
-    L = await asyncio.gather(
+    await asyncio.gather(
         update_weather(),
         update_chromecast(),
         update_spotify(),
-        update_main()
+        main()
     )
-    print(L)
 
 weather = Weather()
 frame = Frame()
