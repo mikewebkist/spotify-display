@@ -93,7 +93,7 @@ class Frame:
 
     def swap(self, canvas):
         canvas = Image.eval(canvas, Frame.gamma)
-        self.offscreen_canvas.SetImage(canvas, 0, -32)
+        self.offscreen_canvas.SetImage(canvas, 0, 0)
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
 def getTextImage(texts):
