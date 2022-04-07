@@ -417,7 +417,6 @@ class Music:
                     return 10.0
                 elif cast.media_controller.status.duration:
                     timeleft = round((cast.media_controller.status.duration - cast.media_controller.status.adjusted_current_time))
-                    print(timeleft)
 
                     if timeleft > 10.0:
                         return 10.0
@@ -549,7 +548,7 @@ def main():
                 for x in range(127):
                     # Add an alpha channel to the color for fading in
                     textColorFade = textColor + (x * 2,)
-                    txtImg = music.get_text(0, frame.height - 22, textColorFade, dropshadow=None)
+                    txtImg = music.get_text(0, frame.height - 22, textColorFade, dropshadow=(1,1))
                     frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
 
             time.sleep(1.0)
@@ -557,11 +556,11 @@ def main():
             # If either line of text is longer than the display, scroll
             if length >= frame.width:
                 for x in range(length + 10):
-                    txtImg = music.get_text(0 - x, frame.height - 22, textColor, dropshadow=(1,0))
+                    txtImg = music.get_text(0 - x, frame.height - 22, textColor, dropshadow=(1,1))
                     frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
                     time.sleep(0.0125)
             else:
-                txtImg = music.get_text(0, frame.height - 22, textColor, dropshadow=(1,0))
+                txtImg = music.get_text(0, frame.height - 22, textColor, dropshadow=(1,1))
                 frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
 
         except AttributeError as err:
@@ -581,11 +580,13 @@ async def update_weather():
 async def update_chromecast():
     while True:
         delay = music.get_playing_chromecast()
+        # print(f"chromecast {delay:.1f}secs")
         await asyncio.sleep(delay)
 
 async def update_spotify():
     while True:
         delay = music.get_playing_spotify()
+        # print(f"spotify {delay:.1f}secs")
         await asyncio.sleep(delay)
 
 async def update_main():
