@@ -522,13 +522,13 @@ class Music:
             width = max(width, wh[0])
             height = height + wh[1]
 
-        txtImg = Image.new('RGBA', (width + 1, height + 1), (255, 255, 255, 0))
+        txtImg = Image.new('RGBA', (width + 2, height + 1), (255, 255, 255, 0))
         draw = ImageDraw.Draw(txtImg)
         draw.fontmode = "1"
         y_pos = 0
         for line in lines:
-            draw.text((1, y_pos + 1), line, (0,0,0), font=ttfFont)
-            draw.text((0, y_pos), line, (192, 192, 192), font=ttfFont)
+            draw.text((2, y_pos + 1), line, (0,0,0), font=ttfFont)
+            draw.text((1, y_pos), line, (192, 192, 192), font=ttfFont)
             y_pos = y_pos + ttfFont.getsize(line)[1]
         return txtImg
 
@@ -562,20 +562,11 @@ async def main():
             # Build the song info once per cycle. Could just cache it on album change, but meh.
             txtImg = music.get_text()
 
-            if is_new_song or txtImg.width >= frame.width:
-                for x in range(127):
-                    bg = canvas.copy()
-                    fg = ImageEnhance.Brightness(txtImg).enhance(x * 2 / 256.0)
-                    bg.alpha_composite(fg, dest=(0, frame.height - txtImg.height))
-                    frame.swap(bg.convert('RGB'))
-
-            await asyncio.sleep(1.0)
-
             # If either line of text is longer than the display, scroll
             if txtImg.width >= frame.width:
-                for x in range(txtImg.width + 10):
+                for x in range(txtImg.width + 10 + frame.width):
                     bg = canvas.copy()
-                    bg.alpha_composite(txtImg, dest=(0 - x, frame.height - txtImg.height))
+                    bg.alpha_composite(txtImg, dest=(frame.width - x, frame.height - txtImg.height))
                     frame.swap(bg.convert('RGB'))
                     await asyncio.sleep(0.0125)
                 await asyncio.sleep(1.0)
