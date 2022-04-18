@@ -86,10 +86,11 @@ class Frame:
     
     def gamma(value):
         if weather.night():
-            return value
+            return value >> 1
             # return round(pow(value / 255.0, 1.0) * 255.0)
         else:
-            return round(pow(value / 255.0, 1.25) * 255.0)
+            return value
+            # return round(pow(value / 255.0, 1.25) * 255.0)
 
     def swap(self, canvas):
         canvas = Image.eval(canvas, Frame.gamma)
@@ -99,7 +100,7 @@ class Frame:
 def getTextImage(texts):
     txtImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
     draw = ImageDraw.Draw(txtImg)
-    draw.fontmode = "1"
+    draw.fontmode = None
     for text, position, *font in texts:
         if font:
             lineFont = font[0]
@@ -229,7 +230,7 @@ class Weather:
         for text, color, font in lines:
             draw.text((1, y_pos + 1), text, (0,0,0), font=font)
             draw.text((0, y_pos),     text, color,   font=font)
-            y_pos = y_pos + font.getsize(text)[1] - 1
+            y_pos = y_pos + font.getsize(text)[1]
         return txtImg
 
     def image(self):
@@ -238,12 +239,8 @@ class Weather:
         
         for x in range(24):
             t = time.localtime(self.hour(x+1)["dt"])
-            if t[3] == 0:
-                draw.line([(28, x+4), (30, x+4)], fill=hsluv2rgb(128.0,0.0,25.0))
-            if t[3] in [6, 18]:
+            if t[3] in [0, 6, 12, 18]:
                 draw.line([(29, x+4), (31, x+4)], fill=hsluv2rgb(128.0,0.0,25.0))
-            if t[3] == 12:
-                draw.line([(30, x+4), (32, x+4)], fill=hsluv2rgb(128.0,0.0,25.0))
 
             diff = self.hour(x)["temp"] - self.hour(0)["temp"]
             if diff > 1.0:
@@ -255,6 +252,8 @@ class Weather:
             try:
                 if self.hour(x)["rain"]['1h'] > 0.0:
                     draw.point((31, x+4), fill=hsluv2rgb(255.0, 100.0, 50.0))
+                else:
+                    draw.point((31, x+4), fill=hsluv2rgb(255.0, 0.0, 25.0))
             except KeyError:
                 pass
 
@@ -279,7 +278,7 @@ class Weather:
                                     (self.wind_speed(), hsluv2rgb(183.8, 75.0, 50.0), ttfFontSm),
                                     (self.pressure(),   hsluv2rgb(128.0, 0.0, 50.0),  ttfFontSm) ])
 
-        canvas.alpha_composite(txtImg, dest=(0, 0))
+        canvas.alpha_composite(txtImg, dest=(0, 1))
 
         ts = datetime.now().timestamp()
 
@@ -295,15 +294,15 @@ class Weather:
 
         timeImg = getTextImage([ (
                              mytime,
-                             (32 - (t_width >> 1) + 1, 48 - (t_height >> 1) + 1),
+                             (32 - (t_width >> 1) + 2, 47 - (t_height >> 1) + 1),
                              ttfFontTime,
-                             hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 10),
+                             hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 5),
                              ) ])
         canvas = Image.alpha_composite(canvas, timeImg)
 
         timeImg = getTextImage([ (
                              mytime,
-                             (32 - (t_width >> 1), 48 - (t_height >> 1)),
+                             (32 - (t_width >> 1), 47 - (t_height >> 1)),
                              ttfFontTime,
                              hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 50, 75),
                              ) ])
@@ -350,7 +349,7 @@ class Music:
 
     def get_playing_spotify(self):
         if self.chromecast_songinfo:
-            return 47.0
+            return 60.0
 
         try:
             meta = self._spotify.current_user_playing_track()
@@ -382,14 +381,14 @@ class Music:
                     return 1.0
             else:
                 self.spotify_songinfo = None
-                return 47.0
+                return 60.0
 
         except (spotipy.exceptions.SpotifyException,
                 spotipy.oauth2.SpotifyOauthError) as err:
             logger.error("Spotify error getting current_user_playing_track:")
             logger.error(err)
             self.spotify_songinfo = None
-            return 47.0 * 5.0
+            return 60.0 * 5.0
 
         except (requests.exceptions.ReadTimeout,
                 requests.exceptions.ConnectionError,
@@ -397,14 +396,14 @@ class Music:
             logger.error("Protocol problem getting current_user_playing_track")
             logger.error(err)
             self.spotify_songinfo = None
-            return 47.0
+            return 60.0
 
         # Just in case
-        return 47.0
+        return 60.0
 
     def get_playing_chromecast(self):
         for cast in self.chromecasts:
-            # cast.wait()
+            cast.wait()
             if cast.media_controller.status.player_is_playing:
                 meta = cast.media_controller.status.media_metadata
                 obj = {
