@@ -239,21 +239,21 @@ class Weather:
         
         for x in range(24):
             t = time.localtime(self.hour(x+1)["dt"])
-            if t[3] in [0, 6, 12, 18]:
+            if t[3] % 6 == 0:
                 draw.line([(29, x+4), (31, x+4)], fill=hsluv2rgb(128.0,0.0,25.0))
 
             diff = self.hour(x)["temp"] - self.hour(0)["temp"]
             if diff > 1.0:
-                draw.point((30, x+4), fill=hsluv2rgb(17.5, 100.0, 25.0))
+                draw.point((30, x+4), fill=hsluv2rgb(12.2, 100.0, 25.0))
             elif diff < -1.0:
                 draw.point((30, x+4), fill=hsluv2rgb(231.0, 100.0, 25.0))
             else:
                 draw.point((30, x+4), fill=hsluv2rgb(128.0, 0.0, 25.0))
             try:
                 if self.hour(x)["rain"]['1h'] > 0.0:
-                    draw.point((31, x+4), fill=hsluv2rgb(255.0, 100.0, 50.0))
+                    draw.point((31, x+4), fill=hsluv2rgb(231.0, 100.0, 50.0))
                 else:
-                    draw.point((31, x+4), fill=hsluv2rgb(255.0, 0.0, 25.0))
+                    draw.point((31, x+4), fill=hsluv2rgb(231.0, 0.0, 25.0))
             except KeyError:
                 pass
 
@@ -267,7 +267,7 @@ class Weather:
             try: # one time the payload didn't include minutely data...
                 rain = self._payload["minutely"][2 * m]["precipitation"] + self._payload["minutely"][2 * m + 1]["precipitation"]
                 if rain > 0.0:
-                    draw.point((m, 0), fill=hsluv2rgb(255.0, 100.0, 50.0))
+                    draw.point((m, 0), fill=hsluv2rgb(231.0, 100.0, 50.0))
             except (KeyError, IndexError):
                 pass
 
