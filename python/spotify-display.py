@@ -86,30 +86,21 @@ class Frame:
     
     def gamma(value):
         if weather.night():
-            return value >> 1
-            # return round(pow(value / 255.0, 1.0) * 255.0)
+            return round(pow(value / 255.0, 0.95) * 200.0)
         else:
-            return value
-            # return round(pow(value / 255.0, 1.25) * 255.0)
+            return round(pow(value / 255.0, 0.95) * 255.0)
 
     def swap(self, canvas):
-        canvas = Image.eval(canvas, Frame.gamma)
-        self.offscreen_canvas.SetImage(canvas, 0, 0)
+        self.offscreen_canvas.SetImage(Image.eval(canvas, Frame.gamma), 0, 0)
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
 def getTextImage(texts):
     txtImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
     draw = ImageDraw.Draw(txtImg)
     draw.fontmode = None
-    for text, position, *font in texts:
-        if font:
-            lineFont = font[0]
-            lineColor = font[1]
-        else:
-            lineFont = ttfFont
-            lineColor = textColor
+    for text, position, lineFont, lineColor in texts:
         (x, y) = position
-        draw.text((x, y), text, lineColor,   font=lineFont)
+        draw.text((x, y), text, lineColor, font=lineFont)
     return txtImg
 
 def ktof(k):
@@ -582,26 +573,17 @@ async def main():
 
 async def update_weather():
     while True:
-        t1 = time.perf_counter()
         delay = weather._update()
-        td = time.perf_counter() - t1
-        print(f"weather took {td:.4f} secs. re-run in {delay:.1f} secs")
         await asyncio.sleep(delay)
 
 async def update_chromecast():
     while True:
-        t1 = time.perf_counter()
         delay = music.get_playing_chromecast()
-        td = time.perf_counter() - t1
-        # print(f"chromecast took {td:.4f} secs. re-run in {delay:.1f} secs")
         await asyncio.sleep(delay)
 
 async def update_spotify():
     while True:
-        t1 = time.perf_counter()
         delay = music.get_playing_spotify()
-        td = time.perf_counter() - t1
-        print(f"spotify took {td:.4f} secs. re-run in {delay:.1f} secs")
         await asyncio.sleep(delay)
 
 async def metamain():
