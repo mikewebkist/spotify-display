@@ -86,9 +86,9 @@ class Frame:
     
     def gamma(value):
         if weather.night():
-            return round(pow(value / 255.0, 0.95) * 200.0)
+            return round(pow(value / 255.0, 0.85) * 200.0)
         else:
-            return round(pow(value / 255.0, 0.95) * 255.0)
+            return round(pow(value / 255.0, 0.85) * 255.0)
 
     def swap(self, canvas):
         self.offscreen_canvas.SetImage(Image.eval(canvas, Frame.gamma), 0, 0)
