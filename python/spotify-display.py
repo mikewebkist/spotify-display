@@ -447,8 +447,12 @@ class Music:
             return True
 
     def album_art(self):
-        try:
+        if self.nowplaying()["album_art_url"]:
             return self.nowplaying()["album_art_url"]
+
+        results = self._spotify.search(q='album:' + self.nowplaying()["album"] + ' artist:' + self.nowplaying()["artist"], type='album')
+        try:
+            return results["albums"]["items"][0]["images"][-1]["url"]
         except IndexError:
             return None
 
