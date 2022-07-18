@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from statistics import mean
 from hsluv import hsluv_to_rgb, hpluv_to_rgb
 import math
 import asyncio
@@ -19,7 +20,7 @@ from spotipy.oauth2 import SpotifyOAuth
 from spotipy.cache_handler import CacheFileHandler
 import simplejson
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
-from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilter, ImageOps
+from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilter, ImageOps, ImageStat
 import urllib
 import urllib3
 import requests
@@ -88,7 +89,7 @@ class Frame:
         if weather.night():
             return round(pow(value / 255.0, 0.85) * 200.0)
         else:
-            return round(pow(value / 255.0, 0.85) * 255.0)
+            return round(pow(value / 255.0, 0.85) * 200.0)
 
     def swap(self, canvas):
         self.offscreen_canvas.SetImage(Image.eval(canvas, Frame.gamma), 0, 0)
@@ -327,6 +328,8 @@ class Music:
 
         self.lastAlbum = ""
         self.lastSong = ""
+        self.albumArt = None
+        self.albumArtCached = None
         self.chromecast_songinfo = None
         self.spotify_songinfo = None
 
@@ -399,9 +402,10 @@ class Music:
                 meta = cast.media_controller.status.media_metadata
                 obj = {
                         "chromecast_playing": True,
-                        "track": meta["title"],
+                        "track": meta["title"] if "title" in meta else "",
                         "album": meta["albumName"] if "albumName" in meta else "",
                         "artist": meta["artist"] if "artist" in meta else meta["subtitle"] if "subtitle" in meta else "",
+                        "albumArtist": meta["albumArtist"] if "albumArtist" in meta else "",
                         "album_art_url": meta["images"][0]["url"] if "images" in meta else False,
                         "artist_art_url": False,
                         }
@@ -436,7 +440,27 @@ class Music:
         if self.lastAlbum == self.nowplaying()["album_id"]:
             return False
         else:
+            self.albumArtCached = None
             self.lastAlbum = self.nowplaying()["album_id"]
+            if self.nowplaying()["album_art_url"]:
+                self.albumArt = self.nowplaying()["album_art_url"]
+            else:
+                print("Searching for artist=%s, album=%s" % (self.nowplaying()['albumArtist'], self.nowplaying()['album']))
+                results = self._spotify.search(q='artist:' + self.nowplaying()["albumArtist"] + ' album:' + self.nowplaying()["album"], type='album')
+                try:
+                    print("Album search result: %s" % results["albums"]["items"][0]["name"])
+                    self.albumArt = results["albums"]["items"][0]["images"][-1]["url"]
+                    self.nowplaying()["album_art_url"] = self.albumArt
+                except IndexError:
+                    self.albumArt = None
+                if not self.albumArt:
+                    results = self._spotify.search(q='artist:' + self.nowplaying()["artist"], type='artist')
+                    try:
+                        print("Artist search result: %s" % results["artists"]["items"][0]["name"])
+                        self.albumArt = results["artists"]["items"][0]["images"][-1]["url"]
+                        self.nowplaying()["album_art_url"] = self.albumArt
+                    except IndexError:
+                        self.albumArt = None
             return True
 
     def new_song(self):
@@ -446,31 +470,12 @@ class Music:
             self.lastSong = self.nowplaying()["track_id"]
             return True
 
-    def album_art(self):
-        if self.nowplaying()["album_art_url"]:
-            return self.nowplaying()["album_art_url"]
-
-        results = self._spotify.search(q='album:' + self.nowplaying()["album"] + ' artist:' + self.nowplaying()["artist"], type='album')
-        try:
-            return results["albums"]["items"][0]["images"][-1]["url"]
-        except IndexError:
-            return None
-
-    def artist_art(self):
-        if self.nowplaying()["is_live"]:
-            return None
-
-        results = self._spotify.search(q='artist:' + self.nowplaying()["artist"], type='artist')
-        try:
-            return results["artists"]["items"][0]["images"][-1]["url"]
-        except IndexError:
-            return None
-
     def album_image(self):
-        if self.album_art():
-            url = self.album_art()
-        elif self.artist_art():
-            url = self.artist_art()
+        if self.albumArtCached:
+            return self.albumArtCached
+
+        if self.albumArt:
+            url = self.albumArt
         else: # if we don't have any art, show the weather icon
             return weather.icon()
 
@@ -487,14 +492,20 @@ class Music:
                 image = ImageOps.pad(Image.open(rawimage), size=(64,64), method=Image.LANCZOS, centering=(1,0))
                 image.save(processed, "PNG")
 
-        if weather.night():
-            image = ImageEnhance.Brightness(image).enhance(0.75)
+        brightness = max(ImageStat.Stat(image).mean)
+        print(f"Album art brightness: {brightness:.0f}")
+        if brightness > 160:
+            image = ImageEnhance.Brightness(image).enhance(160.0 / brightness)
+        elif weather.night():
+            image = ImageEnhance.Brightness(image).enhance(0.5)
 
         if frame.height < 64:
             cover = Image.new('RGBA', (64, 64), (0,0,0))
             cover.paste(image.resize((frame.height, frame.height), Image.LANCZOS), (64 - frame.height, 0))
+            self.albumArtCached = cover
             return cover
         else:
+            self.albumArtCached = image
             return image
 
     def canvas(self):
@@ -527,7 +538,7 @@ class Music:
         return txtImg
 
     def get_text(self,textColor=(192,192,192, 255)):
-        if self.album_art() == None:
+        if self.albumArt == None:
             return self.layout_text([self.nowplaying()["track"],
                                      self.nowplaying()["album"],
                                      self.nowplaying()["artist"]])
@@ -539,15 +550,13 @@ async def main():
     while True:
         # We have a playing track.
         if music.nowplaying():
-            canvas = music.canvas()
-
             is_new_song = music.new_song()
 
             # Fade in new album covers
             if music.new_album():
                 print("%s: now playing album: %s" % ("chromecast" if music.chromecast_songinfo else "spotify", music.nowplaying()["album"]))
                 for x in range(127):
-                    frame.swap(ImageEnhance.Brightness(canvas).enhance(x * 2 / 255.0).convert('RGB'))
+                    frame.swap(ImageEnhance.Brightness(music.canvas()).enhance(x * 2 / 255.0).convert('RGB'))
                 await asyncio.sleep(0)
 
             if is_new_song:
@@ -559,13 +568,13 @@ async def main():
             # If either line of text is longer than the display, scroll
             if txtImg.width >= frame.width:
                 for x in range(txtImg.width + 10 + frame.width):
-                    bg = canvas.copy()
+                    bg = music.canvas()
                     bg.alpha_composite(txtImg, dest=(frame.width - x, frame.height - txtImg.height))
                     frame.swap(bg.convert('RGB'))
                     await asyncio.sleep(0.0125)
                 await asyncio.sleep(1.0)
             else:
-                bg = canvas.copy()
+                bg = music.canvas()
                 bg.alpha_composite(txtImg, dest=(0, frame.height - txtImg.height))
                 frame.swap(bg.convert('RGB'))
 
