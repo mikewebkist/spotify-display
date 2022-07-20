@@ -60,8 +60,7 @@ ttfFont = getFont(config["fonts"]["regular"])
 ttfFontSm = getFont(config["fonts"]["small"])
 ttfFontLg = getFont(config["fonts"]["large"])
 ttfFontTime = getFont(config["fonts"]["time"])
-
-weatherFont = ImageFont.truetype("%s/weathericons-regular-webfont.ttf" % basepath, 20)
+weatherFont = getFont(config["openweathermap"]["font"])
 
 logging.basicConfig(filename='/tmp/spotify-matrix.log',level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -436,6 +435,9 @@ class Music:
 
         return 2.0
 
+
+        
+
     def new_album(self):
         if self.lastAlbum == self.nowplaying()["album_id"]:
             return False
@@ -445,10 +447,10 @@ class Music:
             if self.nowplaying()["album_art_url"]:
                 self.albumArt = self.nowplaying()["album_art_url"]
             else:
-                print("Searching for artist=%s, album=%s" % (self.nowplaying()['albumArtist'], self.nowplaying()['album']))
+                # print("Searching for artist=%s, album=%s" % (self.nowplaying()['albumArtist'], self.nowplaying()['album']))
                 results = self._spotify.search(q='artist:' + self.nowplaying()["albumArtist"] + ' album:' + self.nowplaying()["album"], type='album')
                 try:
-                    print("Album search result: %s" % results["albums"]["items"][0]["name"])
+                    print("Album search result: %s by %s" % (results["albums"]["items"][0]["name"], results["albums"]["items"][0]["artists"][0]["name"]))
                     self.albumArt = results["albums"]["items"][0]["images"][-1]["url"]
                     self.nowplaying()["album_art_url"] = self.albumArt
                 except IndexError:
@@ -493,10 +495,11 @@ class Music:
                 image.save(processed, "PNG")
 
         brightness = max(ImageStat.Stat(image).mean)
-        print(f"Album art brightness: {brightness:.0f}")
         if brightness > 160:
+            print(f"Album art too bright for the matrix: {brightness:.0f}")
             image = ImageEnhance.Brightness(image).enhance(160.0 / brightness)
-        elif weather.night():
+        
+        if weather.night():
             image = ImageEnhance.Brightness(image).enhance(0.5)
 
         if frame.height < 64:
@@ -554,13 +557,13 @@ async def main():
 
             # Fade in new album covers
             if music.new_album():
-                print("%s: now playing album: %s" % ("chromecast" if music.chromecast_songinfo else "spotify", music.nowplaying()["album"]))
+                print("%s: now playing album: %s" % ("Chromecast" if music.chromecast_songinfo else "Spotify", music.nowplaying()["album"]))
                 for x in range(127):
                     frame.swap(ImageEnhance.Brightness(music.canvas()).enhance(x * 2 / 255.0).convert('RGB'))
                 await asyncio.sleep(0)
 
             if is_new_song:
-                print("%s: now playing song: %s" % ("chromecast" if music.chromecast_songinfo else "spotify", music.nowplaying()["track"]))
+                print("%s: now playing song: %s" % ("Chromecast" if music.chromecast_songinfo else "Spotify", music.nowplaying()["track"]))
 
             # Build the song info once per cycle. Could just cache it on album change, but meh.
             txtImg = music.get_text()
