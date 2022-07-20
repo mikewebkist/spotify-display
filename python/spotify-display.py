@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 
+from statistics import mean
+from hsluv import hsluv_to_rgb, hpluv_to_rgb
+import math
+import asyncio
 import colorsys
 import pychromecast
 import configparser
@@ -16,7 +20,7 @@ from spotipy.oauth2 import SpotifyOAuth
 from spotipy.cache_handler import CacheFileHandler
 import simplejson
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
-from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilter, ImageOps
+from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilter, ImageOps, ImageStat
 import urllib
 import urllib3
 import requests
@@ -43,6 +47,7 @@ except KeyError:
 image_cache = "%s/imagecache" % (basepath)
 weather = False
 music = False
+frame = False
 
 def getFont(fontconfig):
     path, size = fontconfig.split(",")
@@ -55,11 +60,16 @@ ttfFont = getFont(config["fonts"]["regular"])
 ttfFontSm = getFont(config["fonts"]["small"])
 ttfFontLg = getFont(config["fonts"]["large"])
 ttfFontTime = getFont(config["fonts"]["time"])
+weatherFont = getFont(config["openweathermap"]["font"])
 
-weatherFont = ImageFont.truetype("%s/weathericons-regular-webfont.ttf" % basepath, 20)
-
-# logging.basicConfig(filename='/tmp/spotify-matrix.log',level=logging.INFO)
+logging.basicConfig(filename='/tmp/spotify-matrix.log',level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def hpluv2rgb(h,s,v):
+    return tuple(int(i * 256) for i in hpluv_to_rgb([h, s , v]))
+
+def hsluv2rgb(h,s,v):
+    return tuple(int(i * 256) for i in hsluv_to_rgb([h, s , v]))
 
 class Frame:
     def __init__(self):
@@ -68,8 +78,6 @@ class Frame:
         self.options.hardware_mapping = "adafruit-hat-pwm"
         self.options.rows = int(config["matrix"]["height"])
         self.options.cols = int(config["matrix"]["width"])
-        self.options.disable_hardware_pulsing = False
-        self.options.gpio_slowdown = 3
 
         self.matrix = RGBMatrix(options=self.options)
         self.offscreen_canvas = self.matrix.CreateFrameCanvas()
@@ -78,34 +86,22 @@ class Frame:
     
     def gamma(value):
         if weather.night():
-            return round(pow(value / 255.0, 1.5) * 128.0)
+            return round(pow(value / 255.0, 0.85) * 200.0)
         else:
-            return round(pow(value / 255.0, 1.5) * 255.0)
-
+            return round(pow(value / 255.0, 0.85) * 200.0)
 
     def swap(self, canvas):
-        canvas = Image.eval(canvas, Frame.gamma)
-        self.offscreen_canvas.SetImage(canvas, 0, 0)
+        self.offscreen_canvas.SetImage(Image.eval(canvas, Frame.gamma), 0, 0)
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
-def getTextImage(texts, color, fontmode="1", dropshadow=True):
+def getTextImage(texts):
     txtImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
     draw = ImageDraw.Draw(txtImg)
-    for text, position, *font in texts:
-        if font:
-            lineFont = font[0]
-            lineColor = font[1]
-        else:
-            lineFont = ttfFont
-            lineColor = color
+    draw.fontmode = None
+    for text, position, lineFont, lineColor in texts:
         (x, y) = position
-        draw.fontmode = fontmode
-        if dropshadow:
-            draw.text((x - 1, y + 1), text, (0,0,0), font=lineFont)
-        draw.text((x,     y    ), text, lineColor,   font=lineFont)
+        draw.text((x, y), text, lineColor, font=lineFont)
     return txtImg
-
-textColor = (192, 192, 192)
 
 def ktof(k):
     return (k - 273.15) * 1.8 + 32.0
@@ -114,30 +110,26 @@ class Weather:
     api = "https://api.openweathermap.org/data/2.5/onecall?lat=39.9623348&lon=-75.1927043&appid=%s" % (config["openweathermap"]["api_key"])
 
     def __init__(self):
-        self.nextupdate = 0
-        self._update()
+        pass
     
     def _update(self):
-        if time.time() < self.nextupdate:
-            return False
-
         try:
             r = urllib.request.urlopen(Weather.api)
         except (http.client.RemoteDisconnected, urllib3.exceptions.ProtocolError, urllib.error.URLError) as err:
             logger.error("Problem getting weather")
             logger.error(err)
-            time.sleep(30)
-            return self.nextupdate - time.time()
+            return 30
 
         self._payload = simplejson.loads(r.read())
+        self._lastupdate= datetime.now().timestamp()
         self._now = self._payload["current"]
 
         # Update every 30 minutes overnight to save API calls
-        if time.localtime()[3] <= 5:      
-            self.nextupdate = time.time() + (60 * 30)
+        if time.localtime()[3] <= 5:
+            return 60 * 30
         else:
-            self.nextupdate = time.time() + (60 * 5)
-        
+            return 60 * 10
+
     def night(self):
         if self._now["dt"] > (self._now["sunset"] + 1080) or self._now["dt"] < (self._now["sunrise"] - 1080):
             return True
@@ -214,28 +206,47 @@ class Weather:
     def pressure(self):
         return "%.1f\"" % (self._payload["current"]["pressure"] * 0.0295301)
 
-    def image(self):
-        self._update()
+    def layout_text(self, lines):
+        height = 0
+        width = 0
+        for text, color, font in lines:
+            wh = font.getsize(text)
+            width = max(width, wh[0])
+            height = height + wh[1]
 
+        txtImg = Image.new('RGBA', (width + 1, height + 1), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(txtImg)
+        draw.fontmode = "1"
+        y_pos = -1
+        for text, color, font in lines:
+            draw.text((1, y_pos + 1), text, (0,0,0), font=font)
+            draw.text((0, y_pos),     text, color,   font=font)
+            y_pos = y_pos + font.getsize(text)[1]
+        return txtImg
+
+    def image(self):
         canvas = Image.new('RGBA', (64, 64), (0, 0, 0))
         draw = ImageDraw.Draw(canvas)
         
         for x in range(24):
             t = time.localtime(self.hour(x+1)["dt"])
-            if t[3] == 0:
-                draw.line([(26, x+4), (28, x+4)], fill=(64, 64, 64))
-            if t[3] in [6, 18]:
-                draw.line([(27, x+4), (29, x+4)], fill=(64, 64, 64))
-            if t[3] == 12:
-                draw.line([(28, x+4), (30, x+4)], fill=(64, 64, 64))
+            if t[3] % 6 == 0:
+                draw.line([(29, x+4), (31, x+4)], fill=hsluv2rgb(128.0,0.0,25.0))
 
             diff = self.hour(x)["temp"] - self.hour(0)["temp"]
             if diff > 1.0:
-                draw.point((28, x+4), fill=(128, 96, 16))
+                draw.point((30, x+4), fill=hsluv2rgb(12.2, 100.0, 25.0))
             elif diff < -1.0:
-                draw.point((28, x+4), fill=(32, 32, 192))
+                draw.point((30, x+4), fill=hsluv2rgb(231.0, 100.0, 25.0))
             else:
-                draw.point((28, x+4), fill=(64, 64, 64))
+                draw.point((30, x+4), fill=hsluv2rgb(128.0, 0.0, 25.0))
+            try:
+                if self.hour(x)["rain"]['1h'] > 0.0:
+                    draw.point((31, x+4), fill=hsluv2rgb(231.0, 100.0, 50.0))
+                else:
+                    draw.point((31, x+4), fill=hsluv2rgb(231.0, 0.0, 25.0))
+            except KeyError:
+                pass
 
         iconImage = self.icon()
         # We're replaceing the entire right side of
@@ -243,43 +254,53 @@ class Weather:
         canvas.paste(iconImage, (32, 6))
 
         # A little indicator of rain in the next hour. Each pixel represents two minutes.
-        for m in range(30):
+        for m in range(32):
             try: # one time the payload didn't include minutely data...
                 rain = self._payload["minutely"][2 * m]["precipitation"] + self._payload["minutely"][2 * m + 1]["precipitation"]
-                if rain > 0:
-                    draw.point((m + 1, 0), fill=(128,128,255))
-                else:
-                    draw.point((m + 1, 0), fill=(32,32,32))
+                if rain > 0.0:
+                    draw.point((m, 0), fill=hsluv2rgb(231.0, 100.0, 50.0))
             except (KeyError, IndexError):
-                draw.point((m + 1, 0), fill=(8, 8, 8))
+                pass
 
         mytime=datetime.now().strftime("%-I:%M")
 
-        txtImg = getTextImage([
-                            (self.temp(),       (1, -1), ttfFontLg,  (192, 192, 128)),
-                            (self.humidity(),   (1, 12), ttfFontSm, (128, 192, 128)),
-                            (self.wind_speed(), (1, 18), ttfFontSm, (128, 192, 192)),
-                            (self.pressure(),   (1, 24), ttfFontSm, (128, 128, 128)),
-                            ],
-                            textColor)
+        txtImg = self.layout_text([ (self.temp(),       hsluv2rgb(69.0, 75.0, 75.0),  ttfFontLg),
+                                    (self.humidity(),   hsluv2rgb(139.9, 75.0, 50.0), ttfFontSm),
+                                    (self.wind_speed(), hsluv2rgb(183.8, 75.0, 50.0), ttfFontSm),
+                                    (self.pressure(),   hsluv2rgb(128.0, 0.0, 50.0),  ttfFontSm) ])
 
-        def hsv2rgb(h,s,v):
-                return tuple(int(i * 256) for i in colorsys.hsv_to_rgb(h,s,v))
+        canvas.alpha_composite(txtImg, dest=(0, 1))
 
-        draw.rectangle([(0,37), (64,64)],
-                fill=hsv2rgb((datetime.now().timestamp() % 1000.0) / 1000.0, 1.0, 0.25))
+        ts = datetime.now().timestamp()
+
+        cycle_time = 120.0
+
+        draw.rectangle([(2,40), (61,61)], fill=hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 25))
+
+        t_width = ttfFontTime.getsize(mytime)[0]
+        t_height = ttfFontTime.getsize(mytime)[1]
+
+        x_shadow = 2.0 * math.cos(math.radians((ts) % 360.0))
+        y_shadow = 2.0 * math.sin(math.radians((ts) % 360.0))
 
         timeImg = getTextImage([ (
                              mytime,
-                             (32 - (ttfFontTime.getsize(mytime)[0] >> 1), 48 - (ttfFontTime.getsize(mytime)[1] >> 1)),
+                             (32 - (t_width >> 1) + 2, 47 - (t_height >> 1) + 1),
                              ttfFontTime,
-                             hsv2rgb(((datetime.now().timestamp()) % 300.0) / 300.0, 0.5, 0.75),
-                             ) ],
-                            textColor, fontmode=None, dropshadow=False)
+                             hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 5),
+                             ) ])
+        canvas = Image.alpha_composite(canvas, timeImg)
+
+        timeImg = getTextImage([ (
+                             mytime,
+                             (32 - (t_width >> 1), 47 - (t_height >> 1)),
+                             ttfFontTime,
+                             hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 50, 75),
+                             ) ])
 
         canvas = Image.alpha_composite(canvas, timeImg)
 
-        return Image.alpha_composite(canvas, txtImg).convert('RGB')
+        return canvas.convert('RGB')
 
 class Music:
     def __init__(self):
@@ -303,133 +324,160 @@ class Music:
                                         scope="user-library-read,user-read-playback-state"))
         user = self._spotify.current_user()
         logger.info("Now Playing for %s [%s]" % (user["display_name"], user["id"]))
-        self.nextupdate = 0
+
         self.lastAlbum = ""
         self.lastSong = ""
-        self._nowplaying = False
-
-        self._update()
-
-    def timeleft(self):
-        return round((self.spotify_duration - self.spotify_progress) / 1000.0)
+        self.albumArt = None
+        self.albumArtCached = None
+        self.chromecast_songinfo = None
+        self.spotify_songinfo = None
 
     def nowplaying(self):
-        return self._nowplaying
+        if self.chromecast_songinfo:
+            return self.chromecast_songinfo
+        elif self.spotify_songinfo:
+            return self.spotify_songinfo
+        else:
+            return None
 
-    def _get_current_track_spotify(self):
+    def get_playing_spotify(self):
+        if self.chromecast_songinfo:
+            return 60.0
+
         try:
             meta = self._spotify.current_user_playing_track()
             if meta and meta["is_playing"] and meta["item"]:
-                self._nowplaying = True
-                self.track = meta["item"]["name"]
-                self.album = meta["item"]["album"]["name"]
-                self.artist = ", ".join(map(lambda x: x["name"], meta["item"]["artists"]))
-                self.album_id = meta["item"]["album"]["id"]
-                self.track_id = meta["item"]["id"]        
-                self.album_art_url = meta["item"]["album"]["images"][-1]["url"]
-                self.artist_art_url = self.artist_art()
-                self.spotify_duration = meta["item"]["duration_ms"]
-                self.spotify_progress = meta["progress_ms"]
-                self.spotify_meta = meta
-                if self.timeleft() > 30:
-                    self.nextupdate = time.time() + 10
+                obj = {
+                        "spotify_playing": True,
+                        "track": meta["item"]["name"],
+                        "album": meta["item"]["album"]["name"],
+                        "artist": ", ".join(map(lambda x: x["name"], meta["item"]["artists"])),
+                        "album_art_url": meta["item"]["album"]["images"][0]["url"],
+                        "artist_art_url": False,
+                        "spotify_duration": meta["item"]["duration_ms"],
+                        "spotify_progress": meta["progress_ms"],
+                        "spotify_meta": meta,
+                        }
+
+                obj["album_id"] = "%s/%s" % (obj["album"], obj["artist"]),
+                obj["track_id"] = "%s/%s/%s" % (obj["track"], obj["album"], obj["artist"]),
+
+                self.spotify_songinfo = obj
+                timeleft = round((obj["spotify_duration"] - obj["spotify_progress"]) / 1000.0) 
+                if (obj["spotify_progress"] / 1000.0) < 15.0:
+                    return 1.0
+                elif timeleft > 30.0:
+                    return 30.0
+                elif timeleft > 5.0:
+                    return timeleft
                 else:
-                    self.nextupdate = time.time() + self.timeleft()
+                    return 1.0
+            else:
+                self.spotify_songinfo = None
+                return 60.0
 
         except (spotipy.exceptions.SpotifyException,
                 spotipy.oauth2.SpotifyOauthError) as err:
             logger.error("Spotify error getting current_user_playing_track:")
             logger.error(err)
-
-            self.nextupdate = time.time() + 60 * 5 # cooloff for 5 minutes
-            self._nowplaying = False
-            return False
+            self.spotify_songinfo = None
+            return 60.0 * 5.0
 
         except (requests.exceptions.ReadTimeout,
                 requests.exceptions.ConnectionError,
                 simplejson.errors.JSONDecodeError) as err:
             logger.error("Protocol problem getting current_user_playing_track")
             logger.error(err)
+            self.spotify_songinfo = None
+            return 60.0
 
-            self.nextupdate = time.time() + 60 # cooloff for 60 seconds
-            self._nowplaying = False
-            return False
+        # Just in case
+        return 60.0
 
-    def _get_current_track_chromecast(self):
-        self._nowplaying = False
+    def get_playing_chromecast(self):
         for cast in self.chromecasts:
             cast.wait()
             if cast.media_controller.status.player_is_playing:
-                try:
-                    meta = cast.media_controller.status.media_metadata
-                    self._nowplaying = True
-                    self.track = meta["title"]
-                    self.album = meta["albumName"] if "albumName" in meta else ""
-                    self.artist = meta["artist"] if "artist" in meta else meta["subtitle"] if "subtitle" in meta else ""
-                    self.album_id = "%s/%s" % (self.album, self.artist)
-                    self.track_id = "%s/%s/%s" % (self.track, self.album, self.artist)
-                    self.album_art_url = meta["images"][0]["url"] if "images" in meta else False
-                    self.artist_art_url = False
-                    self.nextupdate = time.time() + 2
-                except:
-                    pass
+                meta = cast.media_controller.status.media_metadata
+                obj = {
+                        "chromecast_playing": True,
+                        "track": meta["title"] if "title" in meta else "",
+                        "album": meta["albumName"] if "albumName" in meta else "",
+                        "artist": meta["artist"] if "artist" in meta else meta["subtitle"] if "subtitle" in meta else "",
+                        "albumArtist": meta["albumArtist"] if "albumArtist" in meta else "",
+                        "album_art_url": meta["images"][0]["url"] if "images" in meta else False,
+                        "artist_art_url": False,
+                        }
+                obj["album_id"] = "%s/%s" % (obj["album"], obj["artist"]),
+                obj["track_id"] = "%s/%s/%s" % (obj["track"], obj["album"], obj["artist"]),
+                obj["is_live"]  = cast.media_controller.status.stream_type_is_live
+
+                self.chromecast_songinfo = obj
+
+                if cast.media_controller.status.stream_type_is_live:
+                    return 10.0
+                elif cast.media_controller.status.duration:
+                    timeleft = round((cast.media_controller.status.duration - cast.media_controller.status.adjusted_current_time))
+
+                    if timeleft > 10.0:
+                        return 10.0
+                    else:
+                        return timeleft
+                else:
+                    print(cast.media_controller.status)
+                    return 2.0
                 break
+        else:
+            self.chromecast_songinfo = None
 
-    def _update(self):
-        if time.time() < self.nextupdate:
-            return self.nextupdate - time.time()
+            if self.spotify_songinfo:
+                return 10.0
 
-        self._get_current_track_chromecast()
-        if not self.nowplaying():
-            self._get_current_track_spotify()
+        return 2.0
 
-        if not self.nowplaying():
-            if time.localtime()[3] <= 7:
-                self.nextupdate = time.time() + (5 * 60) # check in 5 minutes
-            else:
-                self.nextupdate = time.time() + 60 # check in 1 minute
-            return False
 
-        return self.nextupdate - time.time()
+        
 
     def new_album(self):
-        if self.lastAlbum == self.album_id:
+        if self.lastAlbum == self.nowplaying()["album_id"]:
             return False
         else:
-            self.lastAlbum = self.album_id
+            self.albumArtCached = None
+            self.lastAlbum = self.nowplaying()["album_id"]
+            if self.nowplaying()["album_art_url"]:
+                self.albumArt = self.nowplaying()["album_art_url"]
+            else:
+                # print("Searching for artist=%s, album=%s" % (self.nowplaying()['albumArtist'], self.nowplaying()['album']))
+                results = self._spotify.search(q='artist:' + self.nowplaying()["albumArtist"] + ' album:' + self.nowplaying()["album"], type='album')
+                try:
+                    print("Album search result: %s by %s" % (results["albums"]["items"][0]["name"], results["albums"]["items"][0]["artists"][0]["name"]))
+                    self.albumArt = results["albums"]["items"][0]["images"][-1]["url"]
+                    self.nowplaying()["album_art_url"] = self.albumArt
+                except IndexError:
+                    self.albumArt = None
+                if not self.albumArt:
+                    results = self._spotify.search(q='artist:' + self.nowplaying()["artist"], type='artist')
+                    try:
+                        print("Artist search result: %s" % results["artists"]["items"][0]["name"])
+                        self.albumArt = results["artists"]["items"][0]["images"][-1]["url"]
+                        self.nowplaying()["album_art_url"] = self.albumArt
+                    except IndexError:
+                        self.albumArt = None
             return True
 
     def new_song(self):
-        if self.lastSong == self.track_id:
+        if self.lastSong == self.nowplaying()["track_id"]:
             return False
         else:
-            self.lastSong = self.track_id
+            self.lastSong = self.nowplaying()["track_id"]
             return True
 
-    def artists(self):
-        return tuple(map(lambda x: x["name"], self._nowplaying["item"]["artists"]))
-
-    def is_local(self):
-        return self._nowplaying["item"]["uri"].startswith("spotify:local:")
-
-    def album_art(self):
-        try:
-            return self._nowplaying["item"]["album"]["images"][-1]["url"]
-        except IndexError:
-            return None
-
-    def artist_art(self):
-        results = self._spotify.search(q='artist:' + self.artist, type='artist')
-        try:
-            return results["artists"]["items"][0]["images"][-1]["url"]
-        except IndexError:
-            return None
-
     def album_image(self):
-        if self.album_art_url:
-            url = self.album_art_url
-        elif self.artist_art_url:
-            url = self.artist_art_url
+        if self.albumArtCached:
+            return self.albumArtCached
+
+        if self.albumArt:
+            url = self.albumArt
         else: # if we don't have any art, show the weather icon
             return weather.icon()
 
@@ -446,87 +494,124 @@ class Music:
                 image = ImageOps.pad(Image.open(rawimage), size=(64,64), method=Image.LANCZOS, centering=(1,0))
                 image.save(processed, "PNG")
 
-        # image = ImageEnhance.Brightness(image).enhance(0.75)
-        # image = ImageEnhance.Contrast(image).enhance(0.80)
-        return image
+        brightness = max(ImageStat.Stat(image).mean)
+        if brightness > 160:
+            print(f"Album art too bright for the matrix: {brightness:.0f}")
+            image = ImageEnhance.Brightness(image).enhance(160.0 / brightness)
+        
+        if weather.night():
+            image = ImageEnhance.Brightness(image).enhance(0.5)
+
+        if frame.height < 64:
+            cover = Image.new('RGBA', (64, 64), (0,0,0))
+            cover.paste(image.resize((frame.height, frame.height), Image.LANCZOS), (64 - frame.height, 0))
+            self.albumArtCached = cover
+            return cover
+        else:
+            self.albumArtCached = image
+            return image
 
     def canvas(self):
         canvas = Image.new('RGBA', (64, 64), (0,0,0))
         canvas.paste(self.album_image(), (0, 0))
+
         if weather.steamy():
-            canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 128, 64)),], textColor))
+            canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 128, 64)),]))
         elif weather.icy():
-            canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 148, 196)),], textColor))
+            canvas.alpha_composite(getTextImage([(weather.feelslike(), (0, -2), ttfFont, (128, 148, 196)),]))
+
         return canvas
 
-    def get_text_length(self):
-        if self.album_art_url == None:
-            return max(ttfFont.getsize(self.track)[0], ttfFont.getsize(self.album)[0], ttfFont.getsize(self.artist)[0])
+    def layout_text(self, lines):
+        height = 0
+        width = 0
+        for line in lines:
+            wh = ttfFont.getsize(line)
+            width = max(width, wh[0])
+            height = height + wh[1]
+
+        txtImg = Image.new('RGBA', (width + 2, height + 1), (255, 255, 255, 0))
+        draw = ImageDraw.Draw(txtImg)
+        draw.fontmode = "1"
+        y_pos = 0
+        for line in lines:
+            draw.text((2, y_pos + 1), line, (0,0,0), font=ttfFont)
+            draw.text((1, y_pos), line, (192, 192, 192), font=ttfFont)
+            y_pos = y_pos + ttfFont.getsize(line)[1]
+        return txtImg
+
+    def get_text(self,textColor=(192,192,192, 255)):
+        if self.albumArt == None:
+            return self.layout_text([self.nowplaying()["track"],
+                                     self.nowplaying()["album"],
+                                     self.nowplaying()["artist"]])
         else:
-            return max(ttfFont.getsize(self.track)[0], ttfFont.getsize(self.artist)[0])
+            return self.layout_text([self.nowplaying()["track"],
+                                     self.nowplaying()["artist"]])
 
-    def get_text(self, x, y, textColor):
-        if self.album_art_url == None:
-            return getTextImage([
-                (self.track, (x, y - 10)),
-                (self.album, (x, y)),
-                (self.artist, (x, y + 10))
-                ], textColor)
-        else:
-            return getTextImage([
-                (self.track, (x, y)),
-                (self.artist, (x, y + 10))
-                ], textColor)
-
-def main():
-    global weather
-
-    frame = Frame()
-    weather = Weather()
-    music = Music()
-
+async def main():
     while True:
-        music._update()
-        weather._update()
-
         # We have a playing track.
         if music.nowplaying():
-            canvas = music.canvas()
+            is_new_song = music.new_song()
 
+            # Fade in new album covers
             if music.new_album():
+                print("%s: now playing album: %s" % ("Chromecast" if music.chromecast_songinfo else "Spotify", music.nowplaying()["album"]))
                 for x in range(127):
-                    frame.swap(ImageEnhance.Brightness(canvas).enhance(x * 2 / 255.0).convert('RGB'))
-                time.sleep(0.5)
+                    frame.swap(ImageEnhance.Brightness(music.canvas()).enhance(x * 2 / 255.0).convert('RGB'))
+                await asyncio.sleep(0)
 
+            if is_new_song:
+                print("%s: now playing song: %s" % ("Chromecast" if music.chromecast_songinfo else "Spotify", music.nowplaying()["track"]))
 
-            # Length of the longest line of text, in pixels.
-            length = music.get_text_length()
+            # Build the song info once per cycle. Could just cache it on album change, but meh.
+            txtImg = music.get_text()
 
             # If either line of text is longer than the display, scroll
-            if length >= frame.width:
-                for x in range(length + frame.width + 10):
-                    txtImg = music.get_text(frame.width - x, 42, textColor)
-                    frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
-                    time.sleep(0.025)
-
-                time.sleep(2.0)
-
-            # If all the text fits, don't scroll.
+            if txtImg.width >= frame.width:
+                for x in range(txtImg.width + 10 + frame.width):
+                    bg = music.canvas()
+                    bg.alpha_composite(txtImg, dest=(frame.width - x, frame.height - txtImg.height))
+                    frame.swap(bg.convert('RGB'))
+                    await asyncio.sleep(0.0125)
+                await asyncio.sleep(1.0)
             else:
-                if music.new_song():
-                    for x in range(127):
-                        # Add an alpha channel to the color for fading in
-                        textColorFade = textColor + (x * 2,)
-                        txtImg = music.get_text(0, 42, textColorFade)
-                        frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
-
-                txtImg = music.get_text(0, 42, textColor)
-                frame.swap(Image.alpha_composite(canvas, txtImg).convert('RGB'))
-                time.sleep(2.0)
+                bg = music.canvas()
+                bg.alpha_composite(txtImg, dest=(0, frame.height - txtImg.height))
+                frame.swap(bg.convert('RGB'))
 
         # Nothing is playing
         else:
             frame.swap(weather.image().convert('RGB'))
-            time.sleep(0.5)
 
-main()
+        await asyncio.sleep(0)
+
+async def update_weather():
+    while True:
+        delay = weather._update()
+        await asyncio.sleep(delay)
+
+async def update_chromecast():
+    while True:
+        delay = music.get_playing_chromecast()
+        await asyncio.sleep(delay)
+
+async def update_spotify():
+    while True:
+        delay = music.get_playing_spotify()
+        await asyncio.sleep(delay)
+
+async def metamain():
+    await asyncio.gather(
+        update_weather(),
+        update_chromecast(),
+        update_spotify(),
+        main()
+    )
+
+weather = Weather()
+frame = Frame()
+music = Music()
+
+asyncio.run(metamain())
