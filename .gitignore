@@ -15,3 +15,5 @@
 # vendor/
 spotify-display
 python/.cache
+python/imagecache
+python/tokens
