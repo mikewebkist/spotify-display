@@ -156,12 +156,16 @@ async def metamain():
 
 frame = Frame()
 weather = weatherimport.Weather(api_key=config["openweathermap"]["api_key"], 
+                                frame=frame,
                                 image_cache=image_cache, 
                                 fontSm=ttfFontSm, fontLg=ttfFontLg, fontTime=ttfFontTime, font=ttfFont)
-music = musicimport.Music(devices=devices, spotify_secret=config["spotify"]["spotify_secret"], 
-                                            spotify_id=config["spotify"]["spotify_id"],
-                                            spotify_user=config["spotify"]["username"],
-                                            weather=weather,
-                                            image_cache=image_cache, font=ttfFont)
+
+music = musicimport.Music(devices=devices, 
+                            spotify_secret=config["spotify"]["spotify_secret"], 
+                            spotify_id=config["spotify"]["spotify_id"],
+                            spotify_user=config["spotify"]["username"],
+                            weather=weather,
+                            frame=frame,
+                            image_cache=image_cache, font=ttfFont)
 
 asyncio.run(metamain())

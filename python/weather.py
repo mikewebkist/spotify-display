@@ -20,13 +20,14 @@ def ktof(k):
 class Weather:
     api_url = "https://api.openweathermap.org/data/2.5/onecall?lat=39.9623348&lon=-75.1927043&appid="
     
-    def __init__(self, api_key=None, font=None, fontSm=None, fontLg=None, fontTime=None, image_cache=""):
+    def __init__(self, api_key=None, frame=None, font=None, fontSm=None, fontLg=None, fontTime=None, image_cache=""):
         self.api_key = api_key
         self.image_cache = image_cache
         self.font = font
         self.fontSm = fontSm
         self.fontLg = fontLg
         self.fontTime = fontTime
+        self.frame = frame
     
     def _update(self):
         try:
@@ -138,6 +139,8 @@ class Weather:
             draw.text((1, y_pos + 1), text, (0,0,0), font=font)
             draw.text((0, y_pos),     text, color,   font=font)
             y_pos = y_pos + font.getsize(text)[1]
+            if self.frame.height < 64:
+                y_pos = y_pos -1
         return txtImg
 
     def image(self):
@@ -178,8 +181,6 @@ class Weather:
             except (KeyError, IndexError):
                 pass
 
-        mytime=datetime.now().strftime("%-I:%M")
-
         txtImg = self.layout_text([ (self.temp(),       hsluv2rgb(69.0, 75.0, 75.0),  self.fontLg),
                                     (self.humidity(),   hsluv2rgb(139.9, 75.0, 50.0), self.fontSm),
                                     (self.wind_speed(), hsluv2rgb(183.8, 75.0, 50.0), self.fontSm),
@@ -187,27 +188,30 @@ class Weather:
 
         canvas.alpha_composite(txtImg, dest=(0, 1))
 
-        ts = datetime.now().timestamp()
+        if self.frame.height > 32:
+            mytime=datetime.now().strftime("%-I:%M")
 
-        cycle_time = 120.0
+            ts = datetime.now().timestamp()
 
-        draw.rectangle([(2,40), (61,61)], fill=hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 25))
+            cycle_time = 120.0
 
-        t_width = self.fontTime.getsize(mytime)[0]
-        t_height = self.fontTime.getsize(mytime)[1]
+            draw.rectangle([(2,40), (61,61)], fill=hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 25))
 
-        x_shadow = 2.0 * math.cos(math.radians((ts) % 360.0))
-        y_shadow = 2.0 * math.sin(math.radians((ts) % 360.0))
+            t_width = self.fontTime.getsize(mytime)[0]
+            t_height = self.fontTime.getsize(mytime)[1]
 
-        timeImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
-        draw = ImageDraw.Draw(timeImg)
-        draw.fontmode = None
-        
-        draw.text((32 - (t_width >> 1) + 2, 47 - (t_height >> 1) + 1),
-                mytime, hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 5), font=self.fontTime)
-        draw.text((32 - (t_width >> 1), 47 - (t_height >> 1)),
-                mytime, hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 50, 75), font=self.fontTime)
+            x_shadow = 2.0 * math.cos(math.radians((ts) % 360.0))
+            y_shadow = 2.0 * math.sin(math.radians((ts) % 360.0))
 
-        canvas = Image.alpha_composite(canvas, timeImg)
+            timeImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
+            draw = ImageDraw.Draw(timeImg)
+            draw.fontmode = None
+            
+            draw.text((32 - (t_width >> 1) + 2, 47 - (t_height >> 1) + 1),
+                    mytime, hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 5), font=self.fontTime)
+            draw.text((32 - (t_width >> 1), 47 - (t_height >> 1)),
+                    mytime, hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 50, 75), font=self.fontTime)
+
+            canvas = Image.alpha_composite(canvas, timeImg)
 
         return canvas.convert('RGB')

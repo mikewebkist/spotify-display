@@ -20,11 +20,12 @@ if basepath == "":
 image_cache = "%s/imagecache" % (basepath)
 
 class Music:
-    def __init__(self, devices=None, spotify_id=None, spotify_secret=None, spotify_user=None,
+    def __init__(self, devices=None, frame=None, spotify_id=None, spotify_secret=None, spotify_user=None,
                         font=None, image_cache="", weather=None):
 
         self.font = font
-        self.weather = weather                
+        self.weather = weather   
+        self.frame=frame             
         if devices:
             chromecasts, self.browser = pychromecast.get_chromecasts()
             self.chromecasts = []
@@ -219,6 +220,11 @@ class Music:
         
         if self.weather.night():
             image = ImageEnhance.Brightness(image).enhance(0.5)
+
+        if self.frame.height < 64:
+            cover = Image.new('RGBA', (64, 32), (0,0,0))
+            cover.paste(image.resize((self.frame.height, self.frame.height), Image.LANCZOS), (64 - self.frame.height,0))
+            image = cover
 
         self.albumArtCached = image
         return image
