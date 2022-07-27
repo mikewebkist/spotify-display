@@ -17,3 +17,5 @@ spotify-display
 python/.cache
 python/imagecache
 python/tokens
+python/local.config
+__pycache__
