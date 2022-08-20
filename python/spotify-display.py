@@ -22,7 +22,6 @@ import simplejson
 from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
 from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilter, ImageOps, ImageStat
 import urllib
-import urllib3
 import requests
 import http
 import socket
@@ -101,13 +100,10 @@ async def main():
 
             # Fade in new album covers
             if music.new_album():
-                print("%s: now playing album: %s" % ("Chromecast" if music.chromecast_songinfo else "Spotify", music.nowplaying()["album"]))
+                print("%s: now playing album: %s" % (music.nowplaying(), music.nowplaying().album))
                 for x in range(127):
                     frame.swap(ImageEnhance.Brightness(music.canvas()).enhance(x * 2 / 255.0).convert('RGB'))
                 await asyncio.sleep(0)
-
-            if is_new_song:
-                print("%s: now playing song: %s" % ("Chromecast" if music.chromecast_songinfo else "Spotify", music.nowplaying()["track"]))
 
             # Build the song info once per cycle. Could just cache it on album change, but meh.
             txtImg = music.get_text()
@@ -141,6 +137,11 @@ async def update_chromecast():
         delay = music.get_playing_chromecast()
         await asyncio.sleep(delay)
 
+async def update_plex():
+    while True:
+        delay = music.get_playing_plex()
+        await asyncio.sleep(delay)
+
 async def update_spotify():
     while True:
         delay = music.get_playing_spotify()
@@ -150,6 +151,7 @@ async def metamain():
     await asyncio.gather(
         update_weather(),
         update_chromecast(),
+        update_plex(),
         update_spotify(),
         main()
     )
@@ -164,6 +166,7 @@ music = musicimport.Music(devices=devices,
                             spotify_secret=config["spotify"]["spotify_secret"], 
                             spotify_id=config["spotify"]["spotify_id"],
                             spotify_user=config["spotify"]["username"],
+                            plexToken=config["plex"]["token"],
                             weather=weather,
                             frame=frame,
                             image_cache=image_cache, font=ttfFont)

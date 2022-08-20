@@ -1,3 +1,4 @@
+import http
 import math
 import urllib
 import simplejson
@@ -32,7 +33,7 @@ class Weather:
     def _update(self):
         try:
             r = urllib.request.urlopen(self.api_url + self.api_key)
-        except (http.client.RemoteDisconnected, urllib3.exceptions.ProtocolError, urllib.error.URLError) as err:
+        except (http.client.RemoteDisconnected, urllib.error.URLError) as err:
             logger.error("Problem getting weather")
             logger.error(err)
             return 30

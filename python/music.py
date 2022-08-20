@@ -9,6 +9,10 @@ import logging
 from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilter, ImageOps, ImageStat
 import urllib
 import requests
+from plexapi.server import PlexServer
+import plexapi
+
+plexbase = 'http://optiplex.local:32400'
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,13 +23,35 @@ if basepath == "":
 
 image_cache = "%s/imagecache" % (basepath)
 
+class Track:
+    def __init__(self, track="", album="", artist="", art=""):
+        self.track = track
+        self.album = album
+        self.artist = artist
+        self.art = art
+        self.is_live = False
+
+    @property
+    def art_url(self):
+        return "https://www.webkist.com/assets/photography/bermuda2022/holga/holga-102.jpg"
+
+    @property
+    def album_id(self):
+        return "%s/%s" % (self.album, self.artist)
+
+    @property
+    def track_id(self):
+        return "%s/%s/%s" % (self.track, self.album, self.artist)
+
 class Music:
     def __init__(self, devices=None, frame=None, spotify_id=None, spotify_secret=None, spotify_user=None,
-                        font=None, image_cache="", weather=None):
+                        font=None, image_cache="", weather=None, plexToken=None):
 
+        self.plextoken = plexToken
         self.font = font
         self.weather = weather   
         self.frame=frame             
+        self.plex = PlexServer(plexbase, plexToken)
         if devices:
             chromecasts, self.browser = pychromecast.get_chromecasts()
             self.chromecasts = []
@@ -57,10 +83,74 @@ class Music:
     def nowplaying(self):
         if self.chromecast_songinfo:
             return self.chromecast_songinfo
+        elif self.plex_songinfo:
+            return self.plex_songinfo
         elif self.spotify_songinfo:
             return self.spotify_songinfo
         else:
             return None
+
+    def get_playing_plex(self):
+        class PlexTrack(Track):
+            def __init__(self, track, album, artist, art, key):
+                super().__init__(track, album, artist, art)
+                self.key = key
+
+            @property
+            def key_id(self):
+                m = self.key.rsplit('/', 1)
+                return m[-1]
+
+            @property
+            def image(self):
+                processed = "%s/%s" % (image_cache, self.key_id)
+                if os.path.exists(processed):
+                    image = Image.open(processed)
+                else:
+                    path = plexapi.utils.download(plexbase + self.art, self.plextoken, filename=self.key_id, savepath="/tmp")
+                    image = Image.open(path)
+                    image = ImageOps.pad(image, size=(64,64), centering=(1,0))
+                    image.save(processed, "PNG")
+
+                brightness = max(ImageStat.Stat(image).mean)
+                if brightness > 160:
+                    print(f"Album art too bright for the matrix: {brightness:.0f}")
+                    image = ImageEnhance.Brightness(image).enhance(160.0 / brightness)
+                
+                if self.weather.night():
+                    image = ImageEnhance.Brightness(image).enhance(0.5)
+
+                if self.frame.height < 64:
+                    cover = Image.new('RGBA', (64, 32), (0,0,0))
+                    cover.paste(image.resize((self.frame.height, self.frame.height), Image.LANCZOS), (64 - self.frame.height,0))
+                    image = cover
+
+                self.albumArtCached = image
+                return image
+
+        try:
+            for client in self.plex.clients():
+                if not client.isPlayingMedia(includePaused=False):
+                    continue
+                print(client.title)
+                item = self.plex.fetchItem(client.timeline.key)
+                print(f'{item.title} - {item.grandparentTitle}')
+                obj = PlexTrack(
+                    track = item.title, 
+                    album = item.parentTitle, 
+                    artist = item.grandparentTitle, 
+                    art = item.art,
+                    key = client.timeline.key)
+                self.plex_songinfo = obj
+                return 10.0
+
+        except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as err:
+            logger.error("Plex server error:")
+            logger.error(err)
+            return 15.0
+
+        self.plex_songinfo = None
+        return 5.0
 
     def get_playing_spotify(self):
         if self.chromecast_songinfo:
@@ -158,76 +248,28 @@ class Music:
         return 2.0
 
     def new_album(self):
-        if self.lastAlbum == self.nowplaying()["album_id"]:
+        if self.lastAlbum == self.nowplaying().album_id:
             return False
         else:
             self.albumArtCached = None
-            self.lastAlbum = self.nowplaying()["album_id"]
-            if self.nowplaying()["album_art_url"]:
-                self.albumArt = self.nowplaying()["album_art_url"]
-            else:
-                # print("Searching for artist=%s, album=%s" % (self.nowplaying()['albumArtist'], self.nowplaying()['album']))
-                results = self._spotify.search(q='artist:' + self.nowplaying()["albumArtist"] + ' album:' + self.nowplaying()["album"], type='album')
-                try:
-                    print("Album search result: %s by %s" % (results["albums"]["items"][0]["name"], results["albums"]["items"][0]["artists"][0]["name"]))
-                    self.albumArt = results["albums"]["items"][0]["images"][-1]["url"]
-                    self.nowplaying()["album_art_url"] = self.albumArt
-                except IndexError:
-                    self.albumArt = None
-                if not self.albumArt:
-                    results = self._spotify.search(q='artist:' + self.nowplaying()["artist"], type='artist')
-                    try:
-                        print("Artist search result: %s" % results["artists"]["items"][0]["name"])
-                        self.albumArt = results["artists"]["items"][0]["images"][-1]["url"]
-                        self.nowplaying()["album_art_url"] = self.albumArt
-                    except IndexError:
-                        self.albumArt = None
+            self.lastAlbum = self.nowplaying().album_id
+
+            self.albumArt = self.nowplaying().art_url
             return True
 
     def new_song(self):
-        if self.lastSong == self.nowplaying()["track_id"]:
+        if self.lastSong == self.nowplaying().track_id:
             return False
         else:
-            self.lastSong = self.nowplaying()["track_id"]
+            self.lastSong = self.nowplaying().track_id
             return True
 
     def album_image(self):
         if self.albumArtCached:
             return self.albumArtCached
-
-        if self.albumArt:
-            url = self.albumArt
-        else: # if we don't have any art, show the weather icon
-            return self.weather.icon()
-
-        m = url.rsplit('/', 1)
-        processed = "%s/album-%s.png" % (image_cache, m[-1])
-
-        # We're going to save the processed image instead of the raw one.
-
-        if os.path.isfile(processed):
-            image = Image.open(processed)
         else:
-            logger.info("Getting %s" % url)
-            with urllib.request.urlopen(url) as rawimage:
-                image = ImageOps.pad(Image.open(rawimage), size=(64,64), method=Image.LANCZOS, centering=(1,0))
-                image.save(processed, "PNG")
-
-        brightness = max(ImageStat.Stat(image).mean)
-        if brightness > 160:
-            print(f"Album art too bright for the matrix: {brightness:.0f}")
-            image = ImageEnhance.Brightness(image).enhance(160.0 / brightness)
-        
-        if self.weather.night():
-            image = ImageEnhance.Brightness(image).enhance(0.5)
-
-        if self.frame.height < 64:
-            cover = Image.new('RGBA', (64, 32), (0,0,0))
-            cover.paste(image.resize((self.frame.height, self.frame.height), Image.LANCZOS), (64 - self.frame.height,0))
-            image = cover
-
-        self.albumArtCached = image
-        return image
+            self.albumArtCached = self.nowplaying().image
+            return image
 
     def canvas(self):
         canvas = Image.new('RGBA', (64, 64), (0,0,0))
@@ -262,9 +304,9 @@ class Music:
 
     def get_text(self,textColor=(192,192,192, 255)):
         if self.albumArt == None:
-            return self.layout_text([self.nowplaying()["track"],
-                                     self.nowplaying()["album"],
-                                     self.nowplaying()["artist"]])
+            return self.layout_text([self.nowplaying().track,
+                                     self.nowplaying().album,
+                                     self.nowplaying().artist])
         else:
-            return self.layout_text([self.nowplaying()["track"],
-                                     self.nowplaying()["artist"]])
+            return self.layout_text([self.nowplaying().track,
+                                     self.nowplaying().artist])
