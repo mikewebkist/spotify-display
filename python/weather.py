@@ -9,6 +9,11 @@ from hsluv import hsluv_to_rgb, hpluv_to_rgb
 import sys
 import os
 
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 def hpluv2rgb(h,s,v):
     return tuple(int(i * 256) for i in hpluv_to_rgb([h, s , v]))
 
