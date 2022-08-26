@@ -27,6 +27,7 @@ import http
 import socket
 import weather as weatherimport
 import music as musicimport
+from config import music, weather, config, frame
 
 config = configparser.ConfigParser()
 basepath = os.path.dirname(sys.argv[0])
@@ -46,9 +47,6 @@ except KeyError:
     devices = False
 
 image_cache = "%s/imagecache" % (basepath)
-weather = False
-music = False
-frame = False
 
 def getFont(fontconfig):
     path, size = fontconfig.split(",")
@@ -156,19 +154,16 @@ async def metamain():
         main()
     )
 
-frame = Frame()
-weather = weatherimport.Weather(api_key=config["openweathermap"]["api_key"], 
-                                frame=frame,
+config.frame = frame = Frame()
+config.weather = weather = weatherimport.Weather(api_key=config["openweathermap"]["api_key"], 
                                 image_cache=image_cache, 
                                 fontSm=ttfFontSm, fontLg=ttfFontLg, fontTime=ttfFontTime, font=ttfFont)
 
-music = musicimport.Music(devices=devices, 
+config.music = music = musicimport.Music(devices=devices, 
                             spotify_secret=config["spotify"]["spotify_secret"], 
                             spotify_id=config["spotify"]["spotify_id"],
                             spotify_user=config["spotify"]["username"],
-                            plexToken=config["plex"]["token"],
-                            weather=weather,
-                            frame=frame,
+                            in_plextoken=config["plex"]["token"],
                             image_cache=image_cache, font=ttfFont)
 
 asyncio.run(metamain())

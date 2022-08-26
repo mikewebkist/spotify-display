@@ -11,8 +11,10 @@ import urllib
 import requests
 from plexapi.server import PlexServer
 import plexapi
+import config
 
 plexbase = 'http://optiplex.local:32400'
+plextoken = None
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -44,14 +46,13 @@ class Track:
         return "%s/%s/%s" % (self.track, self.album, self.artist)
 
 class Music:
-    def __init__(self, devices=None, frame=None, spotify_id=None, spotify_secret=None, spotify_user=None,
-                        font=None, image_cache="", weather=None, plexToken=None):
+    def __init__(self, devices=None, spotify_id=None, spotify_secret=None, spotify_user=None,
+                        font=None, image_cache="", in_plextoken=None):
 
-        self.plextoken = plexToken
+        global plextoken
+        plextoken = in_plextoken
         self.font = font
-        self.weather = weather   
-        self.frame=frame             
-        self.plex = PlexServer(plexbase, plexToken)
+        self.plex = PlexServer(plexbase, plextoken)
         if devices:
             chromecasts, self.browser = pychromecast.get_chromecasts()
             self.chromecasts = []
@@ -79,6 +80,7 @@ class Music:
         self.albumArtCached = None
         self.chromecast_songinfo = None
         self.spotify_songinfo = None
+        self.plex_songinfo = None
 
     def nowplaying(self):
         if self.chromecast_songinfo:
@@ -107,7 +109,8 @@ class Music:
                 if os.path.exists(processed):
                     image = Image.open(processed)
                 else:
-                    path = plexapi.utils.download(plexbase + self.art, self.plextoken, filename=self.key_id, savepath="/tmp")
+                    print(plextoken)
+                    path = plexapi.utils.download(plexbase + self.art, plextoken, filename=self.key_id, savepath="/tmp")
                     image = Image.open(path)
                     image = ImageOps.pad(image, size=(64,64), centering=(1,0))
                     image.save(processed, "PNG")
@@ -117,12 +120,12 @@ class Music:
                     print(f"Album art too bright for the matrix: {brightness:.0f}")
                     image = ImageEnhance.Brightness(image).enhance(160.0 / brightness)
                 
-                if self.weather.night():
+                if config.weather.night():
                     image = ImageEnhance.Brightness(image).enhance(0.5)
 
-                if self.frame.height < 64:
+                if config.frame.height < 64:
                     cover = Image.new('RGBA', (64, 32), (0,0,0))
-                    cover.paste(image.resize((self.frame.height, self.frame.height), Image.LANCZOS), (64 - self.frame.height,0))
+                    cover.paste(image.resize((config.frame.height, config.frame.height), Image.LANCZOS), (64 - self.frame.height,0))
                     image = cover
 
                 self.albumArtCached = image
@@ -275,11 +278,11 @@ class Music:
         canvas = Image.new('RGBA', (64, 64), (0,0,0))
         canvas.paste(self.album_image(), (0, 0))
 
-        if self.weather.steamy() or self.weather.icy():
+        if config.weather.steamy() or config.weather.icy():
             txtImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
             draw = ImageDraw.Draw(txtImg)
             draw.fontmode = None
-            draw.text((0, -2), self.weather.feelslike(), (128, 128, 128), font=self.font)
+            draw.text((0, -2), config.weather.feelslike(), (128, 128, 128), font=self.font)
             canvas.alpha_composite(txtImg)
 
         return canvas
