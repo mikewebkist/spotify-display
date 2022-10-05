@@ -8,7 +8,7 @@ from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilt
 from hsluv import hsluv_to_rgb, hpluv_to_rgb
 import sys
 import os
-
+from config import config
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -26,14 +26,14 @@ def ktof(k):
 class Weather:
     api_url = "https://api.openweathermap.org/data/2.5/onecall?lat=39.9623348&lon=-75.1927043&appid="
     
-    def __init__(self, api_key=None, frame=None, font=None, fontSm=None, fontLg=None, fontTime=None, image_cache=""):
+    def __init__(self, api_key=None, font=None, fontSm=None, fontLg=None, fontTime=None, image_cache=""):
         self.api_key = api_key
         self.image_cache = image_cache
         self.font = font
         self.fontSm = fontSm
         self.fontLg = fontLg
         self.fontTime = fontTime
-        self.frame = frame
+        print(config["frame"])
     
     def _update(self):
         try:
@@ -145,7 +145,7 @@ class Weather:
             draw.text((1, y_pos + 1), text, (0,0,0), font=font)
             draw.text((0, y_pos),     text, color,   font=font)
             y_pos = y_pos + font.getsize(text)[1]
-            if self.frame.height < 64:
+            if config["frame"].height < 64:
                 y_pos = y_pos -1
         return txtImg
 
@@ -194,7 +194,7 @@ class Weather:
 
         canvas.alpha_composite(txtImg, dest=(0, 1))
 
-        if self.frame.height > 32:
+        if config["frame"].height > 32:
             mytime=datetime.now().strftime("%-I:%M")
 
             ts = datetime.now().timestamp()

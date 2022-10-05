@@ -11,10 +11,7 @@ import urllib
 import requests
 from plexapi.server import PlexServer
 import plexapi
-import config
-
-plexbase = 'http://optiplex.local:32400'
-plextoken = None
+from config import config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -45,14 +42,72 @@ class Track:
     def track_id(self):
         return "%s/%s/%s" % (self.track, self.album, self.artist)
 
-class Music:
-    def __init__(self, devices=None, spotify_id=None, spotify_secret=None, spotify_user=None,
-                        font=None, image_cache="", in_plextoken=None):
+    def get_image(self):
+        m = self.art_url.rsplit('/', 1)
+        processed = "%s/album-%s.png" % (image_cache, m[-1])
+        if os.path.exists(processed):
+            image = Image.open(processed)
+        else:
+            with urllib.request.urlopen(self.art_url) as rawimage:
+                image = ImageOps.pad(Image.open(rawimage), size=(64,64), method=Image.LANCZOS, centering=(1,0))
+                image.save(processed, "PNG")
+        return image
 
-        global plextoken
-        plextoken = in_plextoken
+
+    @property
+    def image(self):
+        image = self.get_image()
+
+        avg = sum(ImageStat.Stat(image).sum) / sum(ImageStat.Stat(image).count)
+        if avg > 128:
+            print(f"Album art too bright for the matrix: {avg:.0f}")
+            image = ImageEnhance.Brightness(image).enhance(128.0 / avg)
+        
+        if config["weather"].night():
+            image = ImageEnhance.Brightness(image).enhance(0.5)
+
+        if config["frame"].height < 64:
+            cover = Image.new('RGBA', (64, 32), (0,0,0))
+            cover.paste(image.resize((config["frame"].height, config["frame"].height), Image.LANCZOS), (64 - config["frame"].height,0))
+            image = cover
+
+        self.albumArtCached = image
+        return image
+
+class PlexTrack(Track):
+    def __init__(self, track, album, artist, art, key):
+        super().__init__(track, album, artist, art)
+        self.key = key
+
+    @property
+    def key_id(self):
+        m = self.key.rsplit('/', 1)
+        return m[-1]
+
+    @property
+    def art_url(self):
+        return config["config"]["plex"]["base"] + self.art
+
+    def get_image(self):
+        processed = "%s/%s" % (image_cache, self.key_id)
+        if os.path.exists(processed):
+            image = Image.open(processed)
+        else:
+            path = plexapi.utils.download(self.art_url, config["config"]["plex"]["token"], filename=self.key_id, savepath="/tmp")
+            image = Image.open(path)
+            image = ImageOps.pad(image, size=(64,64), centering=(1,0))
+            image.save(processed, "PNG")
+        return image
+
+class Music:
+    def __init__(self, devices=None, font=None, image_cache=""):
+
+        spotify_secret=config["config"]["spotify"]["spotify_secret"]
+        spotify_id=config["config"]["spotify"]["spotify_id"]
+        spotify_user=config["config"]["spotify"]["username"]
+        
         self.font = font
-        self.plex = PlexServer(plexbase, plextoken)
+        self.plex = PlexServer(config["config"]["plex"]["base"], config["config"]["plex"]["token"])
         if devices:
             chromecasts, self.browser = pychromecast.get_chromecasts()
             self.chromecasts = []
@@ -93,56 +148,18 @@ class Music:
             return None
 
     def get_playing_plex(self):
-        class PlexTrack(Track):
-            def __init__(self, track, album, artist, art, key):
-                super().__init__(track, album, artist, art)
-                self.key = key
-
-            @property
-            def key_id(self):
-                m = self.key.rsplit('/', 1)
-                return m[-1]
-
-            @property
-            def image(self):
-                processed = "%s/%s" % (image_cache, self.key_id)
-                if os.path.exists(processed):
-                    image = Image.open(processed)
-                else:
-                    print(plextoken)
-                    path = plexapi.utils.download(plexbase + self.art, plextoken, filename=self.key_id, savepath="/tmp")
-                    image = Image.open(path)
-                    image = ImageOps.pad(image, size=(64,64), centering=(1,0))
-                    image.save(processed, "PNG")
-
-                brightness = max(ImageStat.Stat(image).mean)
-                if brightness > 160:
-                    print(f"Album art too bright for the matrix: {brightness:.0f}")
-                    image = ImageEnhance.Brightness(image).enhance(160.0 / brightness)
-                
-                if config.weather.night():
-                    image = ImageEnhance.Brightness(image).enhance(0.5)
-
-                if config.frame.height < 64:
-                    cover = Image.new('RGBA', (64, 32), (0,0,0))
-                    cover.paste(image.resize((config.frame.height, config.frame.height), Image.LANCZOS), (64 - self.frame.height,0))
-                    image = cover
-
-                self.albumArtCached = image
-                return image
 
         try:
             for client in self.plex.clients():
                 if not client.isPlayingMedia(includePaused=False):
                     continue
-                print(client.title)
                 item = self.plex.fetchItem(client.timeline.key)
                 print(f'{item.title} - {item.grandparentTitle}')
                 obj = PlexTrack(
                     track = item.title, 
                     album = item.parentTitle, 
                     artist = item.grandparentTitle, 
-                    art = item.art,
+                    art = item.parentThumb,
                     key = client.timeline.key)
                 self.plex_songinfo = obj
                 return 10.0
@@ -153,7 +170,7 @@ class Music:
             return 15.0
 
         self.plex_songinfo = None
-        return 5.0
+        return 20.0
 
     def get_playing_spotify(self):
         if self.chromecast_songinfo:
@@ -214,19 +231,11 @@ class Music:
             cast.wait()
             if cast.media_controller.status.player_is_playing:
                 meta = cast.media_controller.status.media_metadata
-                obj = {
-                        "chromecast_playing": True,
-                        "track": meta["title"] if "title" in meta else "",
-                        "album": meta["albumName"] if "albumName" in meta else "",
-                        "artist": meta["artist"] if "artist" in meta else meta["subtitle"] if "subtitle" in meta else "",
-                        "albumArtist": meta["albumArtist"] if "albumArtist" in meta else "",
-                        "album_art_url": meta["images"][0]["url"] if "images" in meta else False,
-                        "artist_art_url": False,
-                        }
-                obj["album_id"] = "%s/%s" % (obj["album"], obj["artist"]),
-                obj["track_id"] = "%s/%s/%s" % (obj["track"], obj["album"], obj["artist"]),
-                obj["is_live"]  = cast.media_controller.status.stream_type_is_live
-
+                obj = Track(
+                    track = meta["title"] if "title" in meta else "",
+                    album = meta["albumName"] if "albumName" in meta else "",
+                    artist = meta["artist"] if "artist" in meta else meta["subtitle"] if "subtitle" in meta else "",
+                    art = meta["images"][0]["url"] if "images" in meta else False)
                 self.chromecast_songinfo = obj
 
                 if cast.media_controller.status.stream_type_is_live:
@@ -261,6 +270,7 @@ class Music:
             return True
 
     def new_song(self):
+        print(self.nowplaying())
         if self.lastSong == self.nowplaying().track_id:
             return False
         else:
@@ -268,21 +278,20 @@ class Music:
             return True
 
     def album_image(self):
-        if self.albumArtCached:
-            return self.albumArtCached
-        else:
+        if not self.albumArtCached:
             self.albumArtCached = self.nowplaying().image
-            return image
+
+        return self.albumArtCached
 
     def canvas(self):
         canvas = Image.new('RGBA', (64, 64), (0,0,0))
         canvas.paste(self.album_image(), (0, 0))
 
-        if config.weather.steamy() or config.weather.icy():
+        if config["weather"].steamy() or config["weather"].icy():
             txtImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
             draw = ImageDraw.Draw(txtImg)
             draw.fontmode = None
-            draw.text((0, -2), config.weather.feelslike(), (128, 128, 128), font=self.font)
+            draw.text((0, -2), config["weather"].feelslike(), (128, 128, 128), font=self.font)
             canvas.alpha_composite(txtImg)
 
         return canvas

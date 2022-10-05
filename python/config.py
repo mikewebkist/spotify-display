@@ -1,4 +1,1 @@
-config = None
-music = None
-weather = None
-frame = None
+config = { "weather": None, "music": None, "frame": None, "config": None }

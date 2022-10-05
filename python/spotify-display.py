@@ -27,9 +27,9 @@ import http
 import socket
 import weather as weatherimport
 import music as musicimport
-from config import music, weather, config, frame
+from config import config
 
-config = configparser.ConfigParser()
+config["config"] = configparser.ConfigParser()
 basepath = os.path.dirname(sys.argv[0])
 if basepath == "":
     basepath = "."
@@ -39,10 +39,10 @@ if len(sys.argv) > 1:
 else:
     configfile = "%s/local.config" % basepath
 
-config.read(configfile)
+config["config"].read(configfile)
 
 try:
-    devices = config["chromecast"]["devices"].split(", ")
+    devices = config["config"]["chromecast"]["devices"].split(", ")
 except KeyError:
     devices = False
 
@@ -52,11 +52,11 @@ def getFont(fontconfig):
     path, size = fontconfig.split(",")
     return ImageFont.truetype(path, int(size))
 
-ttfFont = getFont(config["fonts"]["regular"])
-ttfFontSm = getFont(config["fonts"]["small"])
-ttfFontLg = getFont(config["fonts"]["large"])
-ttfFontTime = getFont(config["fonts"]["time"])
-weatherFont = getFont(config["openweathermap"]["font"])
+ttfFont = getFont(config["config"]["fonts"]["regular"])
+ttfFontSm = getFont(config["config"]["fonts"]["small"])
+ttfFontLg = getFont(config["config"]["fonts"]["large"])
+ttfFontTime = getFont(config["config"]["fonts"]["time"])
+weatherFont = getFont(config["config"]["openweathermap"]["font"])
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -70,10 +70,10 @@ def hsluv2rgb(h,s,v):
 class Frame:
     def __init__(self):
         self.options = RGBMatrixOptions()
-        self.options.brightness = int(config["matrix"]["brightness"])
+        self.options.brightness = int(config["config"]["matrix"]["brightness"])
         self.options.hardware_mapping = "adafruit-hat-pwm"
-        self.options.rows = int(config["matrix"]["height"])
-        self.options.cols = int(config["matrix"]["width"])
+        self.options.rows = int(config["config"]["matrix"]["height"])
+        self.options.cols = int(config["config"]["matrix"]["width"])
 
         self.matrix = RGBMatrix(options=self.options)
         self.offscreen_canvas = self.matrix.CreateFrameCanvas()
@@ -81,7 +81,7 @@ class Frame:
         self.height = self.options.rows
     
     def gamma(value):
-        if weather.night():
+        if config["weather"].night():
             return round(pow(value / 255.0, 0.85) * 200.0)
         else:
             return round(pow(value / 255.0, 0.85) * 200.0)
@@ -91,6 +91,10 @@ class Frame:
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
 async def main():
+    weather = config["weather"]
+    music = config["music"]
+    frame = config["frame"]
+    
     while True:
         # We have a playing track.
         if music.nowplaying():
@@ -110,13 +114,13 @@ async def main():
             if txtImg.width >= frame.width:
                 for x in range(txtImg.width + 10 + frame.width):
                     bg = music.canvas()
-                    bg.alpha_composite(txtImg, dest=(frame.width - x, frame.height - txtImg.height))
+                    bg.alpha_composite(txtImg, dest=(frame.width - x, frame.height - 2 - txtImg.height))
                     frame.swap(bg.convert('RGB'))
                     await asyncio.sleep(0.0125)
                 await asyncio.sleep(1.0)
             else:
                 bg = music.canvas()
-                bg.alpha_composite(txtImg, dest=(0, frame.height - txtImg.height))
+                bg.alpha_composite(txtImg, dest=(0, frame.height - 2 - txtImg.height))
                 frame.swap(bg.convert('RGB'))
 
         # Nothing is playing
@@ -127,22 +131,22 @@ async def main():
 
 async def update_weather():
     while True:
-        delay = weather._update()
+        delay = config["weather"]._update()
         await asyncio.sleep(delay)
 
 async def update_chromecast():
     while True:
-        delay = music.get_playing_chromecast()
+        delay = config["music"].get_playing_chromecast()
         await asyncio.sleep(delay)
 
 async def update_plex():
     while True:
-        delay = music.get_playing_plex()
+        delay = config["music"].get_playing_plex()
         await asyncio.sleep(delay)
 
 async def update_spotify():
     while True:
-        delay = music.get_playing_spotify()
+        delay = config["music"].get_playing_spotify()
         await asyncio.sleep(delay)
 
 async def metamain():
@@ -150,20 +154,16 @@ async def metamain():
         update_weather(),
         update_chromecast(),
         update_plex(),
-        update_spotify(),
+        # update_spotify(),
         main()
     )
 
-config.frame = frame = Frame()
-config.weather = weather = weatherimport.Weather(api_key=config["openweathermap"]["api_key"], 
+config["frame"] = Frame()
+config["weather"] = weatherimport.Weather(api_key=config["config"]["openweathermap"]["api_key"], 
                                 image_cache=image_cache, 
                                 fontSm=ttfFontSm, fontLg=ttfFontLg, fontTime=ttfFontTime, font=ttfFont)
 
-config.music = music = musicimport.Music(devices=devices, 
-                            spotify_secret=config["spotify"]["spotify_secret"], 
-                            spotify_id=config["spotify"]["spotify_id"],
-                            spotify_user=config["spotify"]["username"],
-                            in_plextoken=config["plex"]["token"],
+config["music"] = musicimport.Music(devices=devices, 
                             image_cache=image_cache, font=ttfFont)
 
 asyncio.run(metamain())
