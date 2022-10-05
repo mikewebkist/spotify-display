@@ -33,7 +33,6 @@ class Weather:
         self.fontSm = fontSm
         self.fontLg = fontLg
         self.fontTime = fontTime
-        print(config["frame"])
     
     def _update(self):
         try:

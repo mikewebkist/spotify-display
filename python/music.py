@@ -154,7 +154,6 @@ class Music:
                 if not client.isPlayingMedia(includePaused=False):
                     continue
                 item = self.plex.fetchItem(client.timeline.key)
-                print(f'{item.title} - {item.grandparentTitle}')
                 obj = PlexTrack(
                     track = item.title, 
                     album = item.parentTitle, 
@@ -162,12 +161,11 @@ class Music:
                     art = item.parentThumb,
                     key = client.timeline.key)
                 self.plex_songinfo = obj
-                return 10.0
+                return 5.0
 
         except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as err:
-            logger.error("Plex server error:")
-            logger.error(err)
-            return 15.0
+            logger.error(f"Plex server error: {err}")
+            return 30.0
 
         self.plex_songinfo = None
         return 20.0
@@ -270,7 +268,6 @@ class Music:
             return True
 
     def new_song(self):
-        print(self.nowplaying())
         if self.lastSong == self.nowplaying().track_id:
             return False
         else:
