@@ -82,12 +82,15 @@ class Frame:
     
     def gamma(value):
         if config["weather"].night():
-            return round(pow(value / 255.0, 0.85) * 200.0)
+            return round(pow(value / 255.0, 0.85) * 150.0)
         else:
-            return round(pow(value / 255.0, 0.85) * 200.0)
+            return value
 
     def swap(self, canvas):
-        self.offscreen_canvas.SetImage(Image.eval(canvas, Frame.gamma), 0, 0)
+        if config["weather"].night():
+            self.offscreen_canvas.SetImage(ImageEnhance.Brightness(canvas).enhance(0.5), 0, 0)
+        else:
+            self.offscreen_canvas.SetImage(canvas, 0, 0)
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
 async def main():
@@ -102,7 +105,7 @@ async def main():
 
             # Fade in new album covers
             if music.new_album():
-                print("%s: now playing album: %s" % (music.nowplaying(), music.nowplaying().album))
+                logger.info("now playing album: %s" % (music.nowplaying().album))
                 for x in range(127):
                     frame.swap(ImageEnhance.Brightness(music.canvas()).enhance(x * 2 / 255.0).convert('RGB'))
                 await asyncio.sleep(0)
@@ -136,12 +139,18 @@ async def update_weather():
 
 async def update_chromecast():
     while True:
-        delay = config["music"].get_playing_chromecast()
+        try:
+            delay = config["music"].get_playing_chromecast()
+        except:
+            delay = 30
         await asyncio.sleep(delay)
 
 async def update_plex():
     while True:
-        delay = config["music"].get_playing_plex()
+        try:
+            delay = config["music"].get_playing_plex()
+        except:
+            delay = 30
         await asyncio.sleep(delay)
 
 async def update_spotify():

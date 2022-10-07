@@ -10,6 +10,7 @@ from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilt
 import urllib
 import requests
 from plexapi.server import PlexServer
+from plexapi.myplex import MyPlexDevice
 import plexapi
 from config import config
 
@@ -59,12 +60,10 @@ class Track:
         image = self.get_image()
 
         avg = sum(ImageStat.Stat(image).sum) / sum(ImageStat.Stat(image).count)
-        if avg > 128:
-            print(f"Album art too bright for the matrix: {avg:.0f}")
-            image = ImageEnhance.Brightness(image).enhance(128.0 / avg)
-        
-        if config["weather"].night():
-            image = ImageEnhance.Brightness(image).enhance(0.5)
+        max = 200.0
+        if avg > max:
+            logger.info(f"Image too bright for the matrix: {avg:.0f}")
+            image = ImageEnhance.Brightness(image).enhance(max / avg)
 
         if config["frame"].height < 64:
             cover = Image.new('RGBA', (64, 32), (0,0,0))
@@ -246,7 +245,7 @@ class Music:
                     else:
                         return timeleft
                 else:
-                    print(cast.media_controller.status)
+                    logger.info(cast.media_controller.status)
                     return 2.0
                 break
         else:
