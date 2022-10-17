@@ -97,11 +97,14 @@ async def main():
     weather = config["weather"]
     music = config["music"]
     frame = config["frame"]
+    txtImg = None
     
     while True:
         # We have a playing track.
         if music.nowplaying():
-            is_new_song = music.new_song()
+            if music.new_song():
+                logger.info("now playing song: %s" % (music.nowplaying().track))
+                txtImg = music.get_text()
 
             # Fade in new album covers
             if music.new_album():
@@ -109,9 +112,6 @@ async def main():
                 for x in range(127):
                     frame.swap(ImageEnhance.Brightness(music.canvas()).enhance(x * 2 / 255.0).convert('RGB'))
                 await asyncio.sleep(0)
-
-            # Build the song info once per cycle. Could just cache it on album change, but meh.
-            txtImg = music.get_text()
 
             # If either line of text is longer than the display, scroll
             if txtImg.width >= frame.width:
@@ -139,18 +139,12 @@ async def update_weather():
 
 async def update_chromecast():
     while True:
-        try:
-            delay = config["music"].get_playing_chromecast()
-        except:
-            delay = 30
+        delay = config["music"].get_playing_chromecast()
         await asyncio.sleep(delay)
 
 async def update_plex():
     while True:
-        try:
-            delay = config["music"].get_playing_plex()
-        except:
-            delay = 30
+        delay = config["music"].get_playing_plex()
         await asyncio.sleep(delay)
 
 async def update_spotify():

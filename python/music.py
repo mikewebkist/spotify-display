@@ -6,12 +6,14 @@ import simplejson
 import os
 import sys
 import logging
+import PIL
 from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilter, ImageOps, ImageStat
 import urllib
 import requests
 from plexapi.server import PlexServer
 from plexapi.myplex import MyPlexDevice
 import plexapi
+import random
 from config import config
 
 logging.basicConfig(level=logging.INFO)
@@ -33,7 +35,7 @@ class Track:
 
     @property
     def art_url(self):
-        return "https://www.webkist.com/assets/photography/bermuda2022/holga/holga-102.jpg"
+        return self.art
 
     @property
     def album_id(self):
@@ -43,17 +45,30 @@ class Track:
     def track_id(self):
         return "%s/%s/%s" % (self.track, self.album, self.artist)
 
-    def get_image(self):
-        m = self.art_url.rsplit('/', 1)
+    def get_image(self, url=""):
+        if url == "":
+            url = self.art_url
+
+        m = url.rsplit('/', 1)
         processed = "%s/album-%s.png" % (image_cache, m[-1])
         if os.path.exists(processed):
             image = Image.open(processed)
         else:
-            with urllib.request.urlopen(self.art_url) as rawimage:
+            with urllib.request.urlopen(url) as rawimage:
                 image = ImageOps.pad(Image.open(rawimage), size=(64,64), method=Image.LANCZOS, centering=(1,0))
                 image.save(processed, "PNG")
         return image
 
+    @property
+    def defaultimage(self):
+        url = random.choice([
+            "https://japan-is-an-island.webkist.com/tumblr_files/tumblr_obmagdfqtB1vcet60o1_1280.jpg",
+            "https://japan-is-an-island.webkist.com/tumblr_files/tumblr_objebnzagl1vcet60o1_1280.jpg",
+            "https://www.webkist.com/assets/photography/flickr/small/five-ties_443920236_o.jpg",
+            "https://www.webkist.com/assets/photography/flickr/small/trees--snow_436704156_o.jpg"])
+
+
+        return super(PlexTrack, self).get_image(url = url)
 
     @property
     def image(self):
@@ -70,6 +85,7 @@ class Track:
             cover.paste(image.resize((config["frame"].height, config["frame"].height), Image.LANCZOS), (64 - config["frame"].height,0))
             image = cover
 
+        image = ImageEnhance.Color(image).enhance(0.75)
         self.albumArtCached = image
         return image
 
@@ -93,7 +109,11 @@ class PlexTrack(Track):
             image = Image.open(processed)
         else:
             path = plexapi.utils.download(self.art_url, config["config"]["plex"]["token"], filename=self.key_id, savepath="/tmp")
-            image = Image.open(path)
+            try:
+                image = Image.open(path)
+            except PIL.UnidentifiedImageError as err:
+                return self.defaultimage
+
             image = ImageOps.pad(image, size=(64,64), centering=(1,0))
             image.save(processed, "PNG")
         return image
@@ -155,14 +175,14 @@ class Music:
                 item = self.plex.fetchItem(client.timeline.key)
                 obj = PlexTrack(
                     track = item.title, 
-                    album = item.parentTitle, 
-                    artist = item.grandparentTitle, 
+                    album = item.album().title, 
+                    artist = item.originalTitle or item.artist().title,
                     art = item.parentThumb,
                     key = client.timeline.key)
                 self.plex_songinfo = obj
                 return 5.0
 
-        except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as err:
+        except (AttributeError, requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as err:
             logger.error(f"Plex server error: {err}")
             return 30.0
 
@@ -232,7 +252,7 @@ class Music:
                     track = meta["title"] if "title" in meta else "",
                     album = meta["albumName"] if "albumName" in meta else "",
                     artist = meta["artist"] if "artist" in meta else meta["subtitle"] if "subtitle" in meta else "",
-                    art = meta["images"][0]["url"] if "images" in meta else False)
+                    art = meta["images"][1]["url"] if "images" in meta else False)
                 self.chromecast_songinfo = obj
 
                 if cast.media_controller.status.stream_type_is_live:
@@ -311,10 +331,10 @@ class Music:
         return txtImg
 
     def get_text(self,textColor=(192,192,192, 255)):
-        if self.albumArt == None:
-            return self.layout_text([self.nowplaying().track,
-                                     self.nowplaying().album,
-                                     self.nowplaying().artist])
-        else:
+        # if self.albumArt == None:
+        #     return self.layout_text([self.nowplaying().track,
+        #                              self.nowplaying().album,
+        #                              self.nowplaying().artist])
+        # else:
             return self.layout_text([self.nowplaying().track,
                                      self.nowplaying().artist])

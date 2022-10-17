@@ -175,14 +175,14 @@ class Weather:
         iconImage = self.icon()
         # We're replaceing the entire right side of
         # the image, so no need for alpha blending
-        canvas.paste(iconImage, (32, 6))
+        canvas.paste(iconImage, (31, 7))
 
         # A little indicator of rain in the next hour. Each pixel represents two minutes.
         for m in range(32):
             try: # one time the payload didn't include minutely data...
                 rain = self._payload["minutely"][2 * m]["precipitation"] + self._payload["minutely"][2 * m + 1]["precipitation"]
                 if rain > 0.0:
-                    draw.point((m, 0), fill=hsluv2rgb(231.0, 100.0, 50.0))
+                    draw.point((m, 1), fill=hsluv2rgb(231.0, 100.0, 50.0))
             except (KeyError, IndexError):
                 pass
 
@@ -191,7 +191,7 @@ class Weather:
                                     (self.wind_speed(), hsluv2rgb(183.8, 75.0, 50.0), self.fontSm),
                                     (self.pressure(),   hsluv2rgb(128.0, 0.0, 50.0),  self.fontSm) ])
 
-        canvas.alpha_composite(txtImg, dest=(0, 1))
+        canvas.alpha_composite(txtImg, dest=(1, 2))
 
         if config["frame"].height > 32:
             mytime=datetime.now().strftime("%-I:%M")
