@@ -80,12 +80,6 @@ class Frame:
         self.width = self.options.cols
         self.height = self.options.rows
     
-    def gamma(value):
-        if config["weather"].night():
-            return round(pow(value / 255.0, 0.85) * 150.0)
-        else:
-            return value
-
     def swap(self, canvas):
         if config["weather"].night():
             self.offscreen_canvas.SetImage(ImageEnhance.Brightness(canvas).enhance(0.5), 0, 0)
@@ -108,7 +102,7 @@ async def main():
 
             # Fade in new album covers
             if music.new_album():
-                logger.info("now playing album: %s" % (music.nowplaying().album))
+                logger.info("now playing album: %s - %s" % (music.nowplaying().artist, music.nowplaying().album))
                 for x in range(127):
                     frame.swap(ImageEnhance.Brightness(music.canvas()).enhance(x * 2 / 255.0).convert('RGB'))
                 await asyncio.sleep(0)

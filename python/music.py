@@ -35,7 +35,10 @@ class Track:
 
     @property
     def art_url(self):
-        return self.art
+        if self.art:
+            return self.art
+        else:
+            return None
 
     @property
     def album_id(self):
@@ -48,6 +51,9 @@ class Track:
     def get_image(self, url=""):
         if url == "":
             url = self.art_url
+
+        if url == None:
+            return self.defaultimage
 
         m = url.rsplit('/', 1)
         processed = "%s/album-%s.png" % (image_cache, m[-1])
@@ -68,7 +74,7 @@ class Track:
             "https://www.webkist.com/assets/photography/flickr/small/trees--snow_436704156_o.jpg"])
 
 
-        return super(PlexTrack, self).get_image(url = url)
+        return self.get_image(url = url)
 
     @property
     def image(self):
