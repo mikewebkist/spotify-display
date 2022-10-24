@@ -134,6 +134,9 @@ async def update_weather():
 async def update_chromecast():
     while True:
         delay = config["music"].get_playing_chromecast()
+        if delay == 0:
+            logger.info("bailing on chromecasts")
+            break
         await asyncio.sleep(delay)
 
 async def update_plex():
@@ -149,18 +152,19 @@ async def update_spotify():
 async def metamain():
     await asyncio.gather(
         update_weather(),
-        update_chromecast(),
         update_plex(),
+        update_chromecast(),
         # update_spotify(),
         main()
     )
 
+logger.info(f"init at {time.strftime('%X')}")
 config["frame"] = Frame()
 config["weather"] = weatherimport.Weather(api_key=config["config"]["openweathermap"]["api_key"], 
                                 image_cache=image_cache, 
                                 fontSm=ttfFontSm, fontLg=ttfFontLg, fontTime=ttfFontTime, font=ttfFont)
-
 config["music"] = musicimport.Music(devices=devices, 
                             image_cache=image_cache, font=ttfFont)
+logger.info(f"fin at {time.strftime('%X')}")
 
 asyncio.run(metamain())

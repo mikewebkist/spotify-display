@@ -126,27 +126,16 @@ class PlexTrack(Track):
 
 class Music:
     def __init__(self, devices=None, font=None, image_cache=""):
-
-        spotify_secret=config["config"]["spotify"]["spotify_secret"]
-        spotify_id=config["config"]["spotify"]["spotify_id"]
-        spotify_user=config["config"]["spotify"]["username"]
-        
         self.font = font
+        
+        self.chromecasts = None
         self.plex = PlexServer(config["config"]["plex"]["base"], config["config"]["plex"]["token"])
-        if devices:
-            chromecasts, self.browser = pychromecast.get_chromecasts()
-            self.chromecasts = []
-            # This keeps everything in config file order
-            if chromecasts:
-                for name in devices:
-                    try:
-                        self.chromecasts.append(chromecasts[list(map(lambda x: x.name, chromecasts)).index(name)])
-                    except ValueError:
-                        pass
 
-        self._spotify = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=spotify_id,
-                                        client_secret=spotify_secret,
-                                        cache_handler=CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, spotify_user)),
+        spotify_cache = CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, config["config"]["spotify"]["username"]))
+        self._spotify = spotipy.Spotify(auth_manager=SpotifyOAuth(
+                                        client_id=config["config"]["spotify"]["spotify_id"],
+                                        client_secret=config["config"]["spotify"]["spotify_secret"],
+                                        cache_handler=spotify_cache,
                                         redirect_uri="http://localhost:8080/callback",
                                         show_dialog=True,
                                         open_browser=False,
@@ -250,6 +239,20 @@ class Music:
         return 60.0
 
     def get_playing_chromecast(self):
+        if not self.chromecasts:
+            try:
+                devices=config["config"]["chromecast"]["devices"].split(", ")
+                logger.info(devices)
+                self.chromecasts, self.browser = pychromecast.get_listed_chromecasts(friendly_names=devices)
+                logger.info(f"{self.chromecasts} {self.browser}")
+            except KeyError:
+                pass
+            
+            logger.info(self.chromecasts)
+            # If we still don't have anything, abort Chromecast monitoring.
+            if not self.chromecasts:
+                return 0
+
         for cast in self.chromecasts:
             cast.wait()
             if cast.media_controller.status.player_is_playing:
