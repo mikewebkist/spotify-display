@@ -104,7 +104,12 @@ async def main():
             if music.new_album():
                 logger.info("now playing album: %s - %s" % (music.nowplaying().artist, music.nowplaying().album))
                 for x in range(127):
-                    frame.swap(ImageEnhance.Brightness(music.canvas()).enhance(x * 2 / 255.0).convert('RGB'))
+                    bg = music.canvas()
+                    if txtImg.width < frame.width:
+                        bg.alpha_composite(txtImg, dest=(0, frame.height - 2 - txtImg.height))
+                    frame.swap(ImageEnhance.Brightness(bg).enhance(x * 2 / 255.0).convert('RGB'))
+                    time.sleep(0.0125) # Don't release thread until scroll is done
+
                 await asyncio.sleep(0)
 
             # If either line of text is longer than the display, scroll
@@ -113,7 +118,7 @@ async def main():
                     bg = music.canvas()
                     bg.alpha_composite(txtImg, dest=(frame.width - x, frame.height - 2 - txtImg.height))
                     frame.swap(bg.convert('RGB'))
-                    await asyncio.sleep(0.0125)
+                    time.sleep(0.0125) # Don't release thread until scroll is done
                 await asyncio.sleep(1.0)
             else:
                 bg = music.canvas()
@@ -160,6 +165,6 @@ config["weather"] = weatherimport.Weather(api_key=config["config"]["openweatherm
                                 image_cache=image_cache, 
                                 fontSm=ttfFontSm, fontLg=ttfFontLg, fontTime=ttfFontTime, font=ttfFont)
 config["music"] = musicimport.Music(devices=devices, 
-                            image_cache=image_cache, font=ttfFont)
+                            image_cache=image_cache, font=ttfFontSm)
 
 asyncio.run(metamain())

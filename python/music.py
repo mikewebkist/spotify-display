@@ -31,19 +31,37 @@ class Track:
         self.album = album
         self.artist = artist
         self.album_id = "%s/%s" % (album, artist)
-        self.track_id = "%s/%s" % (track, artist)
         self.art_url = art
         self.is_live = False
+        self.track_id = "%s/%s" % (self.track, self.artist)
+
+    @property
+    def timeleft(self):
+        return self.duration - self.progress
+
+    def recheck_in(self):
+        if self.progress < 15.0:
+            return 1.0
+        elif self.timeleft > 30.0:
+            return 30.0
+        elif self.timeleft > 5.0:
+            return self.timeleft
+        else:
+            return 1.0
 
     def get_image(self):
-        url = random.choice([
-            "https://japan-is-an-island.webkist.com/tumblr_files/tumblr_obmagdfqtB1vcet60o1_1280.jpg",
-            "https://japan-is-an-island.webkist.com/tumblr_files/tumblr_objebnzagl1vcet60o1_1280.jpg",
-            "https://www.webkist.com/assets/photography/flickr/small/five-ties_443920236_o.jpg",
-            "https://www.webkist.com/assets/photography/flickr/small/trees--snow_436704156_o.jpg"])
+        print(self.__class__.__name__)
+        if not self.art_url:
+            url = random.choice([
+                "https://japan-is-an-island.webkist.com/tumblr_files/tumblr_obmagdfqtB1vcet60o1_1280.jpg",
+                "https://japan-is-an-island.webkist.com/tumblr_files/tumblr_objebnzagl1vcet60o1_1280.jpg",
+                "https://www.webkist.com/assets/photography/flickr/small/five-ties_443920236_o.jpg",
+                "https://www.webkist.com/assets/photography/flickr/small/trees--snow_436704156_o.jpg"])
+        else:
+            url = self.art_url
 
         m = url.rsplit('/', 1)
-        processed = "%s/album-%s.png" % (image_cache, m[-1])
+        processed = "%s/%s-%s.png" % (image_cache, self.__class__.__name__, m[-1])
         if os.path.exists(processed):
             image = Image.open(processed)
         else:
@@ -65,23 +83,28 @@ class Track:
         if config["frame"].height < 64:
             cover = Image.new('RGBA', (64, 32), (0,0,0))
             cover.paste(image.resize((config["frame"].height, config["frame"].height), Image.LANCZOS), (64 - config["frame"].height,0))
-            image = cover
+            image = cover.convert('RGBA')
 
         image = ImageEnhance.Color(image).enhance(0.75)
-        self.albumArtCached = image
+        self.albumArtCached = image.convert('RGBA')
         return image
 
 class PlexTrack(Track):
-    def __init__(self, item):
+    def __init__(self, item, client):
         self.item = item
+        self.client = client
         self.is_live = False
         self.track = item.title
         self.album = item.album().title
         self.artist = item.originalTitle or item.artist().title
         self.album_id = item.parentRatingKey
+        self.track_id = item.ratingKey
+        self.duration = client.timeline.duration / 1000.0
+        self.progress = client.timeline.time / 1000.0
+
 
     def get_image(self):
-        processed = "%s/plex%s.png" % (image_cache, self.album_id)
+        processed = "%s/%s-%s.png" % (image_cache, self.__class__.__name__, self.album_id)
         if os.path.exists(processed):
             image = Image.open(processed)
         else:
@@ -106,6 +129,8 @@ class CastTrack(Track):
         self.album = meta["albumName"] if "albumName" in meta else ""
         self.artist = meta["artist"] if "artist" in meta else meta["subtitle"] if "subtitle" in meta else ""
         self.album_id = "%s/%s" % (self.album, self.artist)
+        self.duration = cast.media_controller.status.duration
+        self.progress = cast.media_controller.status.adjusted_current_time
 
         if cast.media_controller.status.media_custom_data.get("providerIdentifier") == "com.plexapp.plugins.library":
             item = config["music"].plex.fetchItem(cast.media_controller.status.media_custom_data["key"])
@@ -115,21 +140,10 @@ class CastTrack(Track):
             self.art_url = meta["images"][1]["url"] if "images" in meta else False
 
     def get_image(self):
-        if not self.art_url:
-            if self.plex_track:
-                return self.plex_track.get_image()
-            else:
-                return super().get_image()
-
-        m = self.art_url.rsplit('/', 1)
-        processed = "%s/cast%s.png" % (image_cache, m[-1])
-        if os.path.exists(processed):
-            image = Image.open(processed)
+        if self.plex_track:
+            return self.plex_track.get_image()
         else:
-            with urllib.request.urlopen(self.art_url) as rawimage:
-                image = ImageOps.pad(Image.open(rawimage), size=(64,64), method=Image.LANCZOS, centering=(1,0))
-                image.save(processed, "PNG")
-        return image
+            return super().get_image()
 
 class SpotifyTrack(Track):
     def __init__(self, meta):
@@ -139,19 +153,19 @@ class SpotifyTrack(Track):
         self.artist = ", ".join(map(lambda x: x["name"], meta["item"]["artists"]))
         self.album_id = meta["item"]["album"]["id"]
         self.art_url = meta["item"]["album"]["images"][0]["url"]
-        self.track_id = meta["item"]["id"]
+        self.duration = meta["item"]["duration_ms"] / 1000.0
+        self.progress = meta["progress_ms"] / 1000.0
 
-    def timeleft(self):
-        return (self.meta["item"]["duration_ms"] - self.meta["progress_ms"]) / 1000.0
-    
-    def progress(self):
-        return self.meta["progress_ms"] / 1000.0
+    @property
+    def track_id(self):
+        return self.meta["item"]["id"]
 
 class Music:
     def __init__(self, devices=None, font=None, image_cache=""):
         self.font = font
         
         self.plex = PlexServer(config["config"]["plex"]["base"], config["config"]["plex"]["token"])
+        self.plex_devices = config["config"]["plex"]["devices"].split(", ")
         self.chromecasts = None
         try:
             devices=config["config"]["chromecast"]["devices"].split(", ")
@@ -171,123 +185,94 @@ class Music:
         user = self._spotify.current_user()
         logger.info("Now Playing for %s [%s]" % (user["display_name"], user["id"]))
 
-        self.lastAlbum = ""
-        self.lastSong = ""
+        self.last_album_id = ""
+        self.last_track_id = ""
         self.albumArtCached = None
         self.chromecast_songinfo = None
         self.spotify_songinfo = None
         self.plex_songinfo = None
+        self.songinfo = None
 
     def nowplaying(self):
-        if self.chromecast_songinfo:
-            return self.chromecast_songinfo
-        elif self.plex_songinfo:
-            return self.plex_songinfo
-        elif self.spotify_songinfo:
-            return self.spotify_songinfo
-        else:
-            return None
+        return self.songinfo
 
     def get_playing_plex(self):
+        if self.songinfo and type(self.songinfo) != PlexTrack:
+            return self.songinfo.recheck_in() + 1.0
+
+        logger.info("Checking Plex")
         try:
             for client in self.plex.clients():
+                if not client.title in self.plex_devices:
+                    continue
                 if not client.isPlayingMedia(includePaused=False):
                     continue
                 item = self.plex.fetchItem(client.timeline.key)
-                obj = PlexTrack(item=item)
-                self.plex_songinfo = obj
-                return 5.0
+                self.songinfo = PlexTrack(item=item, client=client)
+                return self.songinfo.recheck_in()
 
         except (AttributeError, requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as err:
             logger.error(f"Plex server error: {err}")
             return 30.0
 
-        self.plex_songinfo = None
+        self.songinfo = None
         return 20.0
 
     def get_playing_spotify(self):
-        if self.chromecast_songinfo:
-            return 60.0
+        if self.songinfo and type(self.songinfo) != SpotifyTrack:
+            return self.songinfo.recheck_in() + 1.0
 
+        logger.info("Checking Spotify")
         try:
             meta = self._spotify.current_user_playing_track()
         except (spotipy.exceptions.SpotifyException,
-                spotipy.oauth2.SpotifyOauthError) as err:
-            logger.error("Spotify error getting current_user_playing_track:")
-            logger.error(err)
-            self.spotify_songinfo = None
-            return 60.0 * 5.0
-        except (requests.exceptions.ReadTimeout,
+                spotipy.oauth2.SpotifyOauthError,
+                requests.exceptions.ReadTimeout,
                 requests.exceptions.ConnectionError,
                 simplejson.errors.JSONDecodeError) as err:
-            logger.error("Protocol problem getting current_user_playing_track")
-            logger.error(err)
-            self.spotify_songinfo = None
+            logger.error("Spotify error getting current_user_playing_track: %v" % err)
             return 60.0
 
         if meta and meta["is_playing"] and meta["item"]:
-            obj = SpotifyTrack(meta)
-            self.spotify_songinfo = obj
-
-            timeleft = obj.timeleft()
-            if obj.progress() < 15.0:
-                return 1.0
-            elif timeleft > 30.0:
-                return 30.0
-            elif timeleft > 5.0:
-                return timeleft
-            else:
-                return 1.0
+            self.songinfo = SpotifyTrack(meta)
+            return self.spotify_songinfo.recheck_in()
         else:
-            self.spotify_songinfo = None
+            self.songinfo = None
             return 60.0
             
-        # Just in case
-        return 60.0
-
     def get_playing_chromecast(self):
+        if self.songinfo and type(self.songinfo) != CastTrack:
+            return self.songinfo.recheck_in() + 1.0
+
+        logger.info("Checking chromecast devices")
         for cast in self.chromecasts:
             cast.wait()
             if cast.media_controller.status.player_is_playing:
                 meta = cast.media_controller.status.media_metadata
-                obj = CastTrack(cast=cast, meta=meta)
-                self.chromecast_songinfo = obj
+                self.chromecast_songinfo = CastTrack(cast=cast, meta=meta)
 
                 if cast.media_controller.status.stream_type_is_live:
                     return 10.0
-                elif cast.media_controller.status.duration:
-                    timeleft = round((cast.media_controller.status.duration - cast.media_controller.status.adjusted_current_time))
-
-                    if timeleft > 10.0:
-                        return 10.0
-                    else:
-                        return timeleft
                 else:
-                    logger.info(cast.media_controller.status)
-                    return 2.0
-                break
+                    return self.songinfo.recheck_in()
         else:
-            self.chromecast_songinfo = None
-
-            if self.spotify_songinfo:
-                return 10.0
-
-        return 2.0
+            self.songinfo = None
+            return 20.0
 
     def new_album(self):
-        if self.lastAlbum == self.nowplaying().album_id:
+        if self.last_album_id == self.nowplaying().album_id:
             return False
         else:
             self.albumArtCached = None
-            self.lastAlbum = self.nowplaying().album_id
+            self.last_album_id = self.nowplaying().album_id
 
             return True
 
     def new_song(self):
-        if self.lastSong == self.nowplaying().track_id:
+        if self.last_track_id == self.nowplaying().track_id:
             return False
         else:
-            self.lastSong = self.nowplaying().track_id
+            self.last_track_id = self.nowplaying().track_id
             return True
 
     def album_image(self):
@@ -323,10 +308,10 @@ class Music:
         y_pos = 0
         for line in lines:
             draw.text((2, y_pos + 1), line, (0,0,0), font=self.font)
-            draw.text((1, y_pos), line, (192, 192, 192), font=self.font)
+            draw.text((1, y_pos), line, (255, 255, 255), font=self.font)
             y_pos = y_pos + self.font.getsize(line)[1]
         return txtImg
 
-    def get_text(self,textColor=(192,192,192, 255)):
+    def get_text(self):
             return self.layout_text([self.nowplaying().track,
                                      self.nowplaying().artist])
