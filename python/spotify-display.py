@@ -9,7 +9,7 @@ import pychromecast
 import configparser
 from datetime import datetime
 import spotipy
-from random import random
+import random
 import logging
 import time
 import sys
@@ -98,7 +98,7 @@ async def main():
         if music.nowplaying():
             if music.new_song():
                 logger.info("now playing song: %s" % (music.nowplaying().track))
-                txtImg = music.get_text()
+                txtImg = music.layout_text([music.nowplaying().track, music.nowplaying().artist])
 
             # Fade in new album covers
             if music.new_album():
@@ -127,7 +127,7 @@ async def main():
 
         # Nothing is playing
         else:
-            frame.swap(weather.image().convert('RGB'))
+            frame.swap(weather.image())
 
         await asyncio.sleep(0)
 
@@ -163,7 +163,7 @@ async def metamain():
 config["frame"] = Frame()
 config["weather"] = weatherimport.Weather(api_key=config["config"]["openweathermap"]["api_key"], 
                                 image_cache=image_cache, 
-                                fontSm=ttfFontSm, fontLg=ttfFontLg, fontTime=ttfFontTime, font=ttfFont)
+                                fontSm=getFont(config["config"]["fonts"]["small_weather"]), fontLg=ttfFontLg, fontTime=ttfFontTime, font=ttfFont)
 config["music"] = musicimport.Music(devices=devices, 
                             image_cache=image_cache, font=ttfFontSm)
 

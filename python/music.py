@@ -40,6 +40,8 @@ class Track:
         return self.duration - self.progress
 
     def recheck_in(self):
+        if self.timeleft < 0:
+            return 30.0
         if self.progress < 15.0:
             return 1.0
         elif self.timeleft > 30.0:
@@ -131,6 +133,10 @@ class CastTrack(Track):
         self.album_id = "%s/%s" % (self.album, self.artist)
         self.duration = cast.media_controller.status.duration
         self.progress = cast.media_controller.status.adjusted_current_time
+        self.track_id = "%s/%s" % (self.track, self.artist)
+        if cast.media_controller.status.images:
+            print(cast.media_controller.status.images[0])
+            self.art_url = cast.media_controller.status.images[0].url
 
         if cast.media_controller.status.media_custom_data.get("providerIdentifier") == "com.plexapp.plugins.library":
             item = config["music"].plex.fetchItem(cast.media_controller.status.media_custom_data["key"])
@@ -138,6 +144,13 @@ class CastTrack(Track):
             self.art_url = False
         else:
             self.art_url = meta["images"][1]["url"] if "images" in meta else False
+
+    @property
+    def timeleft(self):
+        if self.cast.media_controller.status.stream_type_is_live:
+            return -1
+        else:
+            return self.duration - self.progress
 
     def get_image(self):
         if self.plex_track:
@@ -166,6 +179,7 @@ class Music:
         
         self.plex = PlexServer(config["config"]["plex"]["base"], config["config"]["plex"]["token"])
         self.plex_devices = config["config"]["plex"]["devices"].split(", ")
+
         self.chromecasts = None
         try:
             devices=config["config"]["chromecast"]["devices"].split(", ")
@@ -188,9 +202,6 @@ class Music:
         self.last_album_id = ""
         self.last_track_id = ""
         self.albumArtCached = None
-        self.chromecast_songinfo = None
-        self.spotify_songinfo = None
-        self.plex_songinfo = None
         self.songinfo = None
 
     def nowplaying(self):
@@ -200,12 +211,16 @@ class Music:
         if self.songinfo and type(self.songinfo) != PlexTrack:
             return self.songinfo.recheck_in() + 1.0
 
-        logger.info("Checking Plex")
+        logger.info(f"Checking Plex for {self.plex_devices}")
         try:
             for client in self.plex.clients():
-                if not client.title in self.plex_devices:
+                logger.info(f"checking client {client.title}")
+                if client.title not in self.plex_devices:
+                    logger.info(f"Unknown client {client.title}")
                     continue
+                print(client)
                 if not client.isPlayingMedia(includePaused=False):
+                    logger.info(f"Client {client.title} not playing")
                     continue
                 item = self.plex.fetchItem(client.timeline.key)
                 self.songinfo = PlexTrack(item=item, client=client)
@@ -230,12 +245,12 @@ class Music:
                 requests.exceptions.ReadTimeout,
                 requests.exceptions.ConnectionError,
                 simplejson.errors.JSONDecodeError) as err:
-            logger.error("Spotify error getting current_user_playing_track: %v" % err)
+            logger.error("Spotify error getting current_user_playing_track: %s" % err)
             return 60.0
 
         if meta and meta["is_playing"] and meta["item"]:
             self.songinfo = SpotifyTrack(meta)
-            return self.spotify_songinfo.recheck_in()
+            return self.songinfo.recheck_in()
         else:
             self.songinfo = None
             return 60.0
@@ -249,12 +264,9 @@ class Music:
             cast.wait()
             if cast.media_controller.status.player_is_playing:
                 meta = cast.media_controller.status.media_metadata
-                self.chromecast_songinfo = CastTrack(cast=cast, meta=meta)
+                self.songinfo = CastTrack(cast=cast, meta=meta)
 
-                if cast.media_controller.status.stream_type_is_live:
-                    return 10.0
-                else:
-                    return self.songinfo.recheck_in()
+                return self.songinfo.recheck_in()
         else:
             self.songinfo = None
             return 20.0
@@ -304,14 +316,10 @@ class Music:
 
         txtImg = Image.new('RGBA', (width + 2, height + 1), (255, 255, 255, 0))
         draw = ImageDraw.Draw(txtImg)
-        draw.fontmode = "1"
+        # draw.fontmode = "1"
         y_pos = 0
         for line in lines:
             draw.text((2, y_pos + 1), line, (0,0,0), font=self.font)
             draw.text((1, y_pos), line, (255, 255, 255), font=self.font)
             y_pos = y_pos + self.font.getsize(line)[1]
         return txtImg
-
-    def get_text(self):
-            return self.layout_text([self.nowplaying().track,
-                                     self.nowplaying().artist])
