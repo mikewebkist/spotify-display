@@ -52,7 +52,6 @@ class Track:
             return 1.0
 
     def get_image(self):
-        print(self.__class__.__name__)
         if not self.art_url:
             url = random.choice([
                 "https://japan-is-an-island.webkist.com/tumblr_files/tumblr_obmagdfqtB1vcet60o1_1280.jpg",
@@ -211,16 +210,11 @@ class Music:
         if self.songinfo and type(self.songinfo) != PlexTrack:
             return self.songinfo.recheck_in() + 1.0
 
-        logger.info(f"Checking Plex for {self.plex_devices}")
         try:
             for client in self.plex.clients():
-                logger.info(f"checking client {client.title}")
                 if client.title not in self.plex_devices:
-                    logger.info(f"Unknown client {client.title}")
                     continue
-                print(client)
                 if not client.isPlayingMedia(includePaused=False):
-                    logger.info(f"Client {client.title} not playing")
                     continue
                 item = self.plex.fetchItem(client.timeline.key)
                 self.songinfo = PlexTrack(item=item, client=client)
@@ -237,7 +231,6 @@ class Music:
         if self.songinfo and type(self.songinfo) != SpotifyTrack:
             return self.songinfo.recheck_in() + 1.0
 
-        logger.info("Checking Spotify")
         try:
             meta = self._spotify.current_user_playing_track()
         except (spotipy.exceptions.SpotifyException,
@@ -259,7 +252,6 @@ class Music:
         if self.songinfo and type(self.songinfo) != CastTrack:
             return self.songinfo.recheck_in() + 1.0
 
-        logger.info("Checking chromecast devices")
         for cast in self.chromecasts:
             cast.wait()
             if cast.media_controller.status.player_is_playing:
