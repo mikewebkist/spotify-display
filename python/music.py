@@ -118,6 +118,8 @@ class PlexTrack(Track):
                 return super().get_image()
 
             image = ImageOps.pad(image, size=(64,64), centering=(1,0))
+            if image.mode != "RGB":
+                image = image.convert("RGB")
             image.save(processed, "PNG")
             os.remove(path)
         return image
