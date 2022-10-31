@@ -24,7 +24,7 @@ def ktof(k):
     return (k - 273.15) * 1.8 + 32.0
 
 class Weather:
-    api_url = "https://api.openweathermap.org/data/2.5/onecall?lat=39.9623348&lon=-75.1927043&appid="
+    api_url = "https://api.openweathermap.org/data/3.0/onecall?lat=39.9623348&lon=-75.1927043&appid="
     
     def __init__(self, api_key=None, font=None, fontSm=None, fontLg=None, fontTime=None, image_cache=""):
         self.api_key = api_key
@@ -48,9 +48,9 @@ class Weather:
 
         # Update every 30 minutes overnight to save API calls
         if time.localtime()[3] <= 5:
-            return 60 * 30
+            return 60 * 60
         else:
-            return 60 * 10
+            return 60 * 15
 
     def night(self):
         if self._now["dt"] > (self._now["sunset"] + 1080) or self._now["dt"] < (self._now["sunrise"] - 1080):
@@ -70,7 +70,8 @@ class Weather:
         iconBox = Image.new('RGBA', (32, 32), skyColor)
 
         if self.night():
-            phase = (((round(self._payload["daily"][0]["moon_phase"] * 8) % 8)  + 11))
+            print((round(self._payload["daily"][0]["moon_phase"] * 8) % 8) + 11)
+            phase = (((round(self._payload["daily"][0]["moon_phase"] * 8) % 8) + 11))
             moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (self.image_cache, phase)).resize((20,20))
             moonDim = ImageOps.expand(ImageEnhance.Brightness(moonImage).enhance(0.75), border=4, fill=(0,0,0,0))
             iconBox.alpha_composite(moonDim, dest=(2, -2))
