@@ -91,7 +91,7 @@ class Track:
         return image
 
 class PlexTrack(Track):
-    def __init__(self, item, client):
+    def __init__(self, item, client=None):
         self.item = item
         self.client = client
         self.is_live = False
@@ -109,7 +109,8 @@ class PlexTrack(Track):
         if os.path.exists(processed):
             image = Image.open(processed)
         else:
-            url = config["config"]["plex"]["base"] + self.item.parentThumb
+            art_url = self.item.parentThumb or self.item.grandparentThumb
+            url = config["config"]["plex"]["base"] + art_url
             path = plexapi.utils.download(url, config["config"]["plex"]["token"], filename=str(self.album_id), savepath="/tmp")
             try:
                 image = Image.open(path)
@@ -134,10 +135,8 @@ class CastTrack(Track):
         self.progress = cast.media_controller.status.adjusted_current_time
         self.track_id = "%s/%s" % (self.track, self.artist)
         if cast.media_controller.status.images:
-            print(cast.media_controller.status.images[0])
             self.art_url = cast.media_controller.status.images[0].url
-
-        if cast.media_controller.status.media_custom_data.get("providerIdentifier") == "com.plexapp.plugins.library":
+        elif cast.media_controller.status.media_custom_data.get("providerIdentifier") == "com.plexapp.plugins.library":
             item = config["music"].plex.fetchItem(cast.media_controller.status.media_custom_data["key"])
             self.plex_track = PlexTrack(item=item)
             self.art_url = False
@@ -219,8 +218,10 @@ class Music:
                 item = self.plex.fetchItem(client.timeline.key)
                 self.songinfo = PlexTrack(item=item, client=client)
                 return self.songinfo.recheck_in()
-
-        except (AttributeError, requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as err:
+        except requests.exceptions.ConnectionError as err:
+            logger.error(f"Plex server ConnectionError: {err}")
+            return 30.0
+        except (AttributeError, requests.exceptions.ReadTimeout) as err:
             logger.error(f"Plex server error: {err}")
             return 30.0
 
