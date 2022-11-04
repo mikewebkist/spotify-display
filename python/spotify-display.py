@@ -168,3 +168,30 @@ config["music"] = musicimport.Music(devices=devices,
                             image_cache=image_cache, font=ttfFontSm)
 
 asyncio.run(metamain())
+
+def clock():
+    if config["frame"].height > 32:
+    mytime=datetime.now().strftime("%-I:%M")
+
+    ts = datetime.now().timestamp()
+
+    cycle_time = 120.0
+
+    draw.rectangle([(2,40), (61,61)], fill=hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 25))
+
+    t_width = self.fontTime.getsize(mytime)[0]
+    t_height = self.fontTime.getsize(mytime)[1]
+
+    x_shadow = 2.0 * math.cos(math.radians((ts) % 360.0))
+    y_shadow = 2.0 * math.sin(math.radians((ts) % 360.0))
+
+    timeImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
+    draw = ImageDraw.Draw(timeImg)
+    draw.fontmode = None
+    
+    draw.text((32 - (t_width >> 1) + 2, 47 - (t_height >> 1) + 1),
+            mytime, hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 5), font=self.fontTime)
+    draw.text((32 - (t_width >> 1), 47 - (t_height >> 1)),
+            mytime, hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 50, 75), font=self.fontTime)
+
+    canvas = Image.alpha_composite(canvas, timeImg)
