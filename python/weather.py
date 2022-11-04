@@ -43,38 +43,28 @@ class Weather:
             return 30
 
         self._payload = simplejson.loads(r.read())
-        self._lastupdate= datetime.now().timestamp()
         self._now = self._payload["current"]
-
-        # Update every 30 minutes overnight to save API calls
-        if time.localtime()[3] <= 5:
+        
+        if self.hour(0)["pop"] > 0.0:
+            return 60 * 5
+        elif time.localtime()[3] <= 5:
             return 60 * 60
         else:
             return 60 * 15
 
+    @property
     def night(self):
-        if self._now["dt"] > (self._now["sunset"] + 1080) or self._now["dt"] < (self._now["sunrise"] - 1080):
-            return True
-        else:
-            return False
+        return time.time() > self._now["sunset"] or time.time() < self._now["sunrise"]
 
     def icon(self):
-        if self.night():
-            skyColor = (0, 0, 0)
-        else:
-            clouds = self.clouds() / 100.0
-            # skyColor = (0, 0, 32)
-            skyColor = (int(clouds * 16), int(clouds * 16), 16)
-            skyColor = (0, 0, 0)
+        iconBox = Image.new('RGBA', (32, 32), (0, 0, 0))
 
-        iconBox = Image.new('RGBA', (32, 32), skyColor)
-
-        if self.night():
-            print((round(self._payload["daily"][0]["moon_phase"] * 8) % 8) + 11)
-            phase = (((round(self._payload["daily"][0]["moon_phase"] * 8) % 8) + 11))
-            moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (self.image_cache, phase)).resize((20,20))
-            moonDim = ImageOps.expand(ImageEnhance.Brightness(moonImage).enhance(0.75), border=4, fill=(0,0,0,0))
-            iconBox.alpha_composite(moonDim, dest=(2, -2))
+        if self.night:
+            if time.time() > self._now["moonrise"] or time.time() < self._now["moonset"]:
+                phase = (((round(self._payload["daily"][0]["moon_phase"] * 8) % 8) + 11))
+                moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (self.image_cache, phase)).resize((20,20))
+                moonDim = ImageOps.expand(ImageEnhance.Brightness(moonImage).enhance(0.75), border=4, fill=(0,0,0,0))
+                iconBox.alpha_composite(moonDim, dest=(2, -2))
 
         else:
             url = "http://openweathermap.org/img/wn/%s.png" % (self._now["weather"][0]["icon"])

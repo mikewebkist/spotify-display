@@ -81,7 +81,7 @@ class Frame:
         self.height = self.options.rows
     
     def swap(self, canvas):
-        if config["weather"].night():
+        if config["weather"].night:
             self.offscreen_canvas.SetImage(ImageEnhance.Brightness(canvas).enhance(0.5), 0, 0)
         else:
             self.offscreen_canvas.SetImage(canvas, 0, 0)
