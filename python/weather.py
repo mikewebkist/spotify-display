@@ -166,14 +166,17 @@ class Weather:
         iconImage = self.icon()
         # We're replaceing the entire right side of
         # the image, so no need for alpha blending
-        canvas.paste(iconImage, (31, 7))
+        canvas.paste(iconImage, (31, 5))
 
         # A little indicator of rain in the next hour. Each pixel represents two minutes.
         for m in range(32):
             try: # one time the payload didn't include minutely data...
                 rain = self._payload["minutely"][2 * m]["precipitation"] + self._payload["minutely"][2 * m + 1]["precipitation"]
                 if rain > 0.0:
-                    draw.point((m, 1), fill=hsluv2rgb(231.0, 100.0, 50.0))
+                    draw.point((m, 0), fill=hsluv2rgb(231.0, 100.0, 50.0))
+                else:
+                    draw.point((m, 0), fill=hsluv2rgb(231.0, 0.0, 10.0))
+
             except (KeyError, IndexError):
                 pass
 
@@ -182,32 +185,6 @@ class Weather:
                                     (self.wind_speed(), hsluv2rgb(183.8, 75.0, 50.0), self.fontSm),
                                     (self.pressure(),   hsluv2rgb(128.0, 0.0, 50.0),  self.fontSm) ])
 
-        canvas.alpha_composite(txtImg, dest=(1, 2))
-
-        if config["frame"].height > 32:
-            mytime=datetime.now().strftime("%-I:%M")
-
-            ts = datetime.now().timestamp()
-
-            cycle_time = 120.0
-
-            draw.rectangle([(2,40), (61,61)], fill=hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 25))
-
-            t_width = self.fontTime.getsize(mytime)[0]
-            t_height = self.fontTime.getsize(mytime)[1]
-
-            x_shadow = 2.0 * math.cos(math.radians((ts) % 360.0))
-            y_shadow = 2.0 * math.sin(math.radians((ts) % 360.0))
-
-            timeImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
-            draw = ImageDraw.Draw(timeImg)
-            draw.fontmode = None
-            
-            draw.text((32 - (t_width >> 1) + 2, 47 - (t_height >> 1) + 1),
-                    mytime, hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 5), font=self.fontTime)
-            draw.text((32 - (t_width >> 1), 47 - (t_height >> 1)),
-                    mytime, hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 50, 75), font=self.fontTime)
-
-            canvas = Image.alpha_composite(canvas, timeImg)
+        canvas.alpha_composite(txtImg, dest=(0, 0))
 
         return canvas.convert('RGB')

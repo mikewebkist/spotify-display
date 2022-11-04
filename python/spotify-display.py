@@ -81,10 +81,13 @@ class Frame:
         self.height = self.options.rows
     
     def swap(self, canvas):
+        padding_left = int(config["config"]["matrix"]["padding_left"])
+        padding_top = int(config["config"]["matrix"]["padding_top"])
+                
         if config["weather"].night:
-            self.offscreen_canvas.SetImage(ImageEnhance.Brightness(canvas).enhance(0.5), 0, 0)
-        else:
-            self.offscreen_canvas.SetImage(canvas, 0, 0)
+            canvas = ImageEnhance.Brightness(canvas).enhance(0.5)
+
+        self.offscreen_canvas.SetImage(canvas, padding_left, padding_top)
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
 async def main():
@@ -170,7 +173,6 @@ config["music"] = musicimport.Music(devices=devices,
 asyncio.run(metamain())
 
 def clock():
-    if config["frame"].height > 32:
     mytime=datetime.now().strftime("%-I:%M")
 
     ts = datetime.now().timestamp()
