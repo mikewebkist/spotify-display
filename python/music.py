@@ -81,7 +81,7 @@ class Track:
             logger.info(f"Image too bright for the matrix: {avg:.0f}")
             image = ImageEnhance.Brightness(image).enhance(max / avg)
 
-        if config["frame"].height < 64:
+        if config["frame"].height < 60:
             cover = Image.new('RGBA', (64, 32), (0,0,0))
             cover.paste(image.resize((config["frame"].height, config["frame"].height), Image.LANCZOS), (64 - config["frame"].height,0))
             image = cover.convert('RGBA')

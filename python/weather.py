@@ -60,7 +60,7 @@ class Weather:
         iconBox = Image.new('RGBA', (32, 32), (0, 0, 0))
 
         if self.night:
-            if time.time() > self._now["moonrise"] or time.time() < self._now["moonset"]:
+            if time.time() > self._payload["daily"][0]["moonrise"] or time.time() < self._payload["daily"][0]["moonset"]:
                 phase = (((round(self._payload["daily"][0]["moon_phase"] * 8) % 8) + 11))
                 moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (self.image_cache, phase)).resize((20,20))
                 moonDim = ImageOps.expand(ImageEnhance.Brightness(moonImage).enhance(0.75), border=4, fill=(0,0,0,0))
@@ -130,7 +130,7 @@ class Weather:
         txtImg = Image.new('RGBA', (width + 1, height + 1), (0, 0, 0, 0))
         draw = ImageDraw.Draw(txtImg)
         draw.fontmode = "1"
-        y_pos = -1
+        y_pos = -2
         for text, color, font in lines:
             draw.text((1, y_pos + 1), text, (0,0,0), font=font)
             draw.text((0, y_pos),     text, color,   font=font)
@@ -140,7 +140,7 @@ class Weather:
         return txtImg
 
     def image(self):
-        canvas = Image.new('RGBA', (64, 64), (0, 0, 0))
+        canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
         draw = ImageDraw.Draw(canvas)
         
         for x in range(24):

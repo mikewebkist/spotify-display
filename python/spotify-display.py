@@ -78,7 +78,7 @@ class Frame:
         self.matrix = RGBMatrix(options=self.options)
         self.offscreen_canvas = self.matrix.CreateFrameCanvas()
         self.width = self.options.cols
-        self.height = self.options.rows
+        self.height = self.options.rows - int(config["config"]["matrix"]["padding_top"])
     
     def swap(self, canvas):
         padding_left = int(config["config"]["matrix"]["padding_left"])
@@ -89,6 +89,32 @@ class Frame:
 
         self.offscreen_canvas.SetImage(canvas, padding_left, padding_top)
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
+
+
+def clock():
+    mytime=datetime.now().strftime("%-I:%M")
+    ts = datetime.now().timestamp()
+    cycle_time = 120.0
+
+    timeImg = Image.new('RGBA', (64, 30), (0,0,0,0))
+    draw = ImageDraw.Draw(timeImg)
+
+    draw.rectangle([(0,0), (64,32)], fill=hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 25))
+
+    t_width = ttfFontTime.getsize(mytime)[0]
+    t_height = ttfFontTime.getsize(mytime)[1]
+
+    x_shadow = 2.0 * math.cos(math.radians((ts) % 360.0))
+    y_shadow = 2.0 * math.sin(math.radians((ts) % 360.0))
+
+    draw.fontmode = None
+    
+    draw.text((32 - (t_width >> 1) + 2, 9 - (t_height >> 1) + 1),
+            mytime, hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 5), font=ttfFontTime)
+    draw.text((32 - (t_width >> 1), 9 - (t_height >> 1)),
+            mytime, hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 50, 75), font=ttfFontTime)
+
+    return timeImg
 
 async def main():
     weather = config["weather"]
@@ -130,7 +156,10 @@ async def main():
 
         # Nothing is playing
         else:
-            frame.swap(weather.image())
+            canvas = Image.new('RGBA', (64, 64), (0, 0, 0))
+            canvas.paste(weather.image(), (0, 0))
+            canvas.paste(clock(), (0,35))
+            frame.swap(canvas.convert('RGB'))
 
         await asyncio.sleep(0)
 
@@ -171,29 +200,3 @@ config["music"] = musicimport.Music(devices=devices,
                             image_cache=image_cache, font=ttfFontSm)
 
 asyncio.run(metamain())
-
-def clock():
-    mytime=datetime.now().strftime("%-I:%M")
-
-    ts = datetime.now().timestamp()
-
-    cycle_time = 120.0
-
-    draw.rectangle([(2,40), (61,61)], fill=hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 25))
-
-    t_width = self.fontTime.getsize(mytime)[0]
-    t_height = self.fontTime.getsize(mytime)[1]
-
-    x_shadow = 2.0 * math.cos(math.radians((ts) % 360.0))
-    y_shadow = 2.0 * math.sin(math.radians((ts) % 360.0))
-
-    timeImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
-    draw = ImageDraw.Draw(timeImg)
-    draw.fontmode = None
-    
-    draw.text((32 - (t_width >> 1) + 2, 47 - (t_height >> 1) + 1),
-            mytime, hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 5), font=self.fontTime)
-    draw.text((32 - (t_width >> 1), 47 - (t_height >> 1)),
-            mytime, hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 50, 75), font=self.fontTime)
-
-    canvas = Image.alpha_composite(canvas, timeImg)
