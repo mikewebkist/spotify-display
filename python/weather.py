@@ -10,6 +10,10 @@ import sys
 import os
 from config import config
 import logging
+from skyfield.api import load, N,S,E,W, wgs84
+from skyfield.magnitudelib import planetary_magnitude
+from skyfield import almanac
+from pytz import timezone
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -60,11 +64,12 @@ class Weather:
         iconBox = Image.new('RGBA', (32, 32), (0, 0, 0))
 
         if self.night:
-            if time.time() > self._payload["daily"][0]["moonrise"] or time.time() < self._payload["daily"][0]["moonset"]:
-                phase = (((round(self._payload["daily"][0]["moon_phase"] * 8) % 8) + 11))
-                moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (self.image_cache, phase)).resize((20,20))
-                moonDim = ImageOps.expand(ImageEnhance.Brightness(moonImage).enhance(0.75), border=4, fill=(0,0,0,0))
-                iconBox.alpha_composite(moonDim, dest=(2, -2))
+            pass
+            # if time.time() > self._payload["daily"][0]["moonrise"] or time.time() < self._payload["daily"][0]["moonset"]:
+            #     phase = (((round(self._payload["daily"][0]["moon_phase"] * 8) % 8) + 11))
+            #     moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (self.image_cache, phase)).resize((20,20))
+            #     moonDim = ImageOps.expand(ImageEnhance.Brightness(moonImage).enhance(0.75), border=4, fill=(0,0,0,0))
+            #     iconBox.alpha_composite(moonDim, dest=(2, -2))
 
         else:
             url = "http://openweathermap.org/img/wn/%s.png" % (self._now["weather"][0]["icon"])
@@ -188,3 +193,62 @@ class Weather:
         canvas.alpha_composite(txtImg, dest=(0, 0))
 
         return canvas.convert('RGB')
+
+    def planets(self):
+        ts = load.timescale()
+        utc = timezone('US/Eastern')
+
+        # Load the JPL ephemeris DE421 (covers 1900-2050).
+        planets = load('de421.bsp')
+        earth = planets['earth']
+        philly = earth + wgs84.latlon(39.9623348 * N, 75.1927043 * W, elevation_m=10.59)
+
+        # Supersampling at 2x
+        canvas = Image.new('RGBA', (128, 64), (0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+        draw.line((32, 0, 32, 64), fill=(4,4,4))
+        draw.line((64, 0, 64, 64), fill=(4,4,4))
+        draw.line((96, 0, 96, 64), fill=(4,4,4))
+        # draw.rectangle((0, 28, 64, 32), fill=(8,32,8))
+        plot_planets = [ 
+            ("moon", (128,128,128), 6), 
+            ("mercury", (16,16,16), 1), 
+            ("venus", (32,32,128), 2), 
+            ("mars", (128,4,4), 2), 
+            ("jupiter barycenter", (128,64,4), 3), 
+            ("saturn barycenter", (128,128,4), 3)
+            ]
+
+        for planet_name, color, size in plot_planets:
+            # this is going to be all sorts of messed up after midnight
+            lines = []
+            for t_local in range(self._payload["daily"][0]["sunset"], self._payload["daily"][1]["sunrise"], 60 * 60):
+                dt_local = utc.localize(datetime.fromtimestamp(t_local))
+                t = ts.from_datetime(dt_local)
+
+                astrometric = philly.at(t).observe(planets[planet_name])
+                alt, az, distance = astrometric.apparent().altaz()
+                if alt.degrees > 0.0:
+                    x = int(az.degrees * 128 / 360)
+                    y = int(56 - (alt.degrees * 56 / 90))
+                    lines.append((x, y))
+            draw.line(lines, fill=(32,32,32), joint="curve")
+
+        for planet_name, color, size in plot_planets:
+            t = ts.now()
+            astrometric = philly.at(t).observe(planets[planet_name])
+            alt, az, distance = astrometric.apparent().altaz()
+
+            if alt.degrees > 0.0:
+                x = int(az.degrees * 128 / 360)
+                y = int(56 - (alt.degrees * 56 / 90))
+        
+                if planet_name == "moon":
+                    phase = (((round(self._payload["daily"][0]["moon_phase"] * 8) % 8) + 11))
+                    moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (self.image_cache, phase)).resize((12,12))
+                    moonDim = ImageOps.expand(ImageEnhance.Brightness(moonImage).enhance(0.75))
+                    canvas.alpha_composite(moonDim, dest=(x-6, y-6))
+                else:
+                    draw.ellipse((x-size, y-size, x+size, y+size), fill=color)
+
+        return canvas.resize((64, 32), resample=Image.ANTIALIAS)

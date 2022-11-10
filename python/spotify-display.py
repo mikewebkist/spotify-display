@@ -91,6 +91,22 @@ class Frame:
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
 
+def small_clock():
+    timeImg = Image.new('RGBA', (32, 32), (0,0,0,0))
+    draw = ImageDraw.Draw(timeImg)
+    ts = datetime.now().timestamp()
+    cycle_time = 120.0
+    # color = hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 5)
+    color = (128, 128, 128)
+    draw.fontmode = None
+    
+    t_width, t_height = ttfFontTime.getsize(datetime.now().strftime("%I"))
+    draw.text((14 - (t_width >> 1), 3 - (t_height >> 1) + 1), datetime.now().strftime("%I"), color, font=ttfFontTime)
+    t_width, t_height = ttfFontTime.getsize(datetime.now().strftime("%M"))
+    draw.text((14 - (t_width >> 1), 18 - (t_height >> 1) + 1), datetime.now().strftime("%M"), color, font=ttfFontTime)
+
+    return timeImg
+
 def clock():
     mytime=datetime.now().strftime("%-I:%M")
     ts = datetime.now().timestamp()
@@ -158,7 +174,11 @@ async def main():
         else:
             canvas = Image.new('RGBA', (64, 64), (0, 0, 0))
             canvas.paste(weather.image(), (0, 0))
-            canvas.paste(clock(), (0,35))
+            if weather.night:
+                canvas.paste(weather.planets(), (0,32))
+                canvas.alpha_composite(small_clock(), dest=(32, 0))
+            else:
+                canvas.paste(clock(), (0,34))
             frame.swap(canvas.convert('RGB'))
 
         await asyncio.sleep(0)
