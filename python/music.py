@@ -7,11 +7,10 @@ import os
 import sys
 import logging
 import PIL
-from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilter, ImageOps, ImageStat
+from PIL import Image, ImageEnhance, ImageDraw, ImageOps, ImageStat
 import urllib
 import requests
 from plexapi.server import PlexServer
-from plexapi.myplex import MyPlexDevice
 import plexapi
 import random
 from config import config

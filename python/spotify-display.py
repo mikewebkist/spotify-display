@@ -1,30 +1,17 @@
 #!/usr/bin/env python3
 
-from statistics import mean
 from hsluv import hsluv_to_rgb, hpluv_to_rgb
 import math
 import asyncio
-import colorsys
-import pychromecast
 import configparser
 from datetime import datetime
-import spotipy
-import random
 import logging
 import time
 import sys
 import os
-from io import BytesIO
 import os.path
-from spotipy.oauth2 import SpotifyOAuth
-from spotipy.cache_handler import CacheFileHandler
-import simplejson
-from rgbmatrix import RGBMatrix, RGBMatrixOptions, graphics
-from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilter, ImageOps, ImageStat
-import urllib
-import requests
-import http
-import socket
+from rgbmatrix import RGBMatrix, RGBMatrixOptions
+from PIL import Image, ImageEnhance, ImageFont, ImageDraw
 import weather as weatherimport
 import music as musicimport
 from config import config

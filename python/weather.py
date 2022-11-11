@@ -1,18 +1,14 @@
 import http
-import math
 import urllib
 import simplejson
 from datetime import datetime
 import time
-from PIL import Image, ImageEnhance, ImageFont, ImageDraw, ImageChops, ImageFilter, ImageOps
+from PIL import Image, ImageEnhance, ImageDraw, ImageOps
 from hsluv import hsluv_to_rgb, hpluv_to_rgb
-import sys
 import os
 from config import config
 import logging
 from skyfield.api import load, N,S,E,W, wgs84
-from skyfield.magnitudelib import planetary_magnitude
-from skyfield import almanac
 from pytz import timezone
 
 logging.basicConfig(level=logging.INFO)
@@ -232,7 +228,7 @@ class Weather:
                     x = int(az.degrees * 128 / 360)
                     y = int(56 - (alt.degrees * 56 / 90))
                     lines.append((x, y))
-            draw.line(lines, fill=(32,32,32), joint="curve")
+            draw.line(lines, fill=(64,64,64), joint="curve")
 
         for planet_name, color, size in plot_planets:
             t = ts.now()
