@@ -35,15 +35,7 @@ except KeyError:
 
 image_cache = "%s/imagecache" % (basepath)
 
-def getFont(fontconfig):
-    path, size = fontconfig.split(",")
-    return ImageFont.truetype(path, int(size))
-
-ttfFont = getFont(config["config"]["fonts"]["regular"])
-ttfFontSm = getFont(config["config"]["fonts"]["small"])
-ttfFontLg = getFont(config["config"]["fonts"]["large"])
-ttfFontTime = getFont(config["config"]["fonts"]["time"])
-weatherFont = getFont(config["config"]["openweathermap"]["font"])
+ttfFontTime = ImageFont.truetype(config["config"]["fonts"]["time"], 18)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -81,16 +73,16 @@ class Frame:
 def small_clock():
     timeImg = Image.new('RGBA', (32, 32), (0,0,0,0))
     draw = ImageDraw.Draw(timeImg)
-    ts = datetime.now().timestamp()
-    cycle_time = 120.0
-    # color = hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 5)
-    color = (128, 128, 128)
+    color = hsluv2rgb(weatherimport.ktof(config["weather"]._payload["current"]["temp"]) / 100.0 * 360.0, 75, 50)
     draw.fontmode = None
     
     t_width, t_height = ttfFontTime.getsize(datetime.now().strftime("%I"))
-    draw.text((14 - (t_width >> 1), 3 - (t_height >> 1) + 1), datetime.now().strftime("%I"), color, font=ttfFontTime)
+    draw.text((17 - (t_width >> 1), 5 - (t_height >> 1) + 1), datetime.now().strftime("%I"), (0,0,0), font=ttfFontTime)
+    draw.text((16 - (t_width >> 1), 4 - (t_height >> 1) + 1), datetime.now().strftime("%I"), color, font=ttfFontTime)
+
     t_width, t_height = ttfFontTime.getsize(datetime.now().strftime("%M"))
-    draw.text((14 - (t_width >> 1), 18 - (t_height >> 1) + 1), datetime.now().strftime("%M"), color, font=ttfFontTime)
+    draw.text((17 - (t_width >> 1), 20 - (t_height >> 1) + 1), datetime.now().strftime("%M"), (0,0,0), font=ttfFontTime)
+    draw.text((16 - (t_width >> 1), 19 - (t_height >> 1) + 1), datetime.now().strftime("%M"), color, font=ttfFontTime)
 
     return timeImg
 
@@ -106,9 +98,6 @@ def clock():
 
     t_width = ttfFontTime.getsize(mytime)[0]
     t_height = ttfFontTime.getsize(mytime)[1]
-
-    x_shadow = 2.0 * math.cos(math.radians((ts) % 360.0))
-    y_shadow = 2.0 * math.sin(math.radians((ts) % 360.0))
 
     draw.fontmode = None
     
@@ -160,12 +149,22 @@ async def main():
         # Nothing is playing
         else:
             canvas = Image.new('RGBA', (64, 64), (0, 0, 0))
-            canvas.paste(weather.image(), (0, 0))
-            if weather.night:
-                canvas.paste(weather.planets(), (0,32))
-                canvas.alpha_composite(small_clock(), dest=(32, 0))
+            
+            # Weather summary is always displayed
+            canvas.paste(weather.weather_summary(), (0, 0))
+            canvas.paste(weather.icon(), (32, 0))
+
+            # On large screens, show a small clock and the planet paths or a big clock
+            if config["frame"].height == 64:
+                if weather.night:
+                    canvas.paste(weather.planets(), (0,32))
+                    canvas.alpha_composite(small_clock(), dest=(32, 0))
+                else:
+                    canvas.paste(clock(), (0,34))
+            # On small screens, show a small clock over the weather icon
             else:
-                canvas.paste(clock(), (0,34))
+                canvas.alpha_composite(small_clock(), dest=(32,0))
+            
             frame.swap(canvas.convert('RGB'))
 
         await asyncio.sleep(0)
@@ -200,10 +199,7 @@ async def metamain():
     )
 
 config["frame"] = Frame()
-config["weather"] = weatherimport.Weather(api_key=config["config"]["openweathermap"]["api_key"], 
-                                image_cache=image_cache, 
-                                fontSm=getFont(config["config"]["fonts"]["small_weather"]), fontLg=ttfFontLg, fontTime=ttfFontTime, font=ttfFont)
-config["music"] = musicimport.Music(devices=devices, 
-                            image_cache=image_cache, font=ttfFontSm)
+config["weather"] = weatherimport.Weather(api_key=config["config"]["openweathermap"]["api_key"], image_cache=image_cache)
+config["music"] = musicimport.Music(devices=devices, image_cache=image_cache)
 
 asyncio.run(metamain())

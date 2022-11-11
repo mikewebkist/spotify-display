@@ -7,7 +7,7 @@ import os
 import sys
 import logging
 import PIL
-from PIL import Image, ImageEnhance, ImageDraw, ImageOps, ImageStat
+from PIL import Image, ImageEnhance, ImageDraw, ImageOps, ImageStat, ImageFont
 import urllib
 import requests
 from plexapi.server import PlexServer
@@ -173,9 +173,7 @@ class SpotifyTrack(Track):
         return self.meta["item"]["id"]
 
 class Music:
-    def __init__(self, devices=None, font=None, image_cache=""):
-        self.font = font
-        
+    def __init__(self, devices=None, image_cache=""):
         self.plex = PlexServer(config["config"]["plex"]["base"], config["config"]["plex"]["token"])
         self.plex_devices = config["config"]["plex"]["devices"].split(", ")
 
@@ -202,6 +200,10 @@ class Music:
         self.last_track_id = ""
         self.albumArtCached = None
         self.songinfo = None
+    
+    def font(self, size=8):
+        return ImageFont.truetype(config["config"]["fonts"]["music"], size)
+
 
     def nowplaying(self):
         return self.songinfo
@@ -291,12 +293,8 @@ class Music:
         canvas = Image.new('RGBA', (64, 64), (0,0,0))
         canvas.paste(self.album_image(), (0, 0))
 
-        if config["weather"].steamy() or config["weather"].icy():
-            txtImg = Image.new('RGBA', (64, 64), (255, 255, 255, 0))
-            draw = ImageDraw.Draw(txtImg)
-            draw.fontmode = None
-            draw.text((0, -2), config["weather"].feelslike(), (128, 128, 128), font=self.font)
-            canvas.alpha_composite(txtImg)
+        if config["weather"].steamy() or config["weather"].icy() or config["frame"].height < 64:
+            canvas.alpha_composite(config["weather"].extreme())
 
         return canvas
 
@@ -304,16 +302,15 @@ class Music:
         height = 0
         width = 0
         for line in lines:
-            wh = self.font.getsize(line)
+            wh = self.font().getsize(line)
             width = max(width, wh[0])
             height = height + wh[1]
 
         txtImg = Image.new('RGBA', (width + 2, height + 1), (255, 255, 255, 0))
         draw = ImageDraw.Draw(txtImg)
-        # draw.fontmode = "1"
         y_pos = 0
         for line in lines:
-            draw.text((2, y_pos + 1), line, (0,0,0), font=self.font)
-            draw.text((1, y_pos), line, (255, 255, 255), font=self.font)
-            y_pos = y_pos + self.font.getsize(line)[1]
+            draw.text((2, y_pos + 1), line, (0, 0, 0, 196), font=self.font())
+            draw.text((1, y_pos), line, (255, 255, 255, 196), font=self.font())
+            y_pos = y_pos + self.font().getsize(line)[1]
         return txtImg

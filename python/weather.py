@@ -3,7 +3,7 @@ import urllib
 import simplejson
 from datetime import datetime
 import time
-from PIL import Image, ImageEnhance, ImageDraw, ImageOps
+from PIL import Image, ImageEnhance, ImageDraw, ImageOps, ImageFont
 from hsluv import hsluv_to_rgb, hpluv_to_rgb
 import os
 from config import config
@@ -14,26 +14,42 @@ from pytz import timezone
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def hpluv2rgb(h,s,v):
-    return tuple(int(i * 256) for i in hpluv_to_rgb([h, s , v]))
-
 def hsluv2rgb(h,s,v):
     return tuple(int(i * 256) for i in hsluv_to_rgb([h, s , v]))
 
 def ktof(k):
     return (k - 273.15) * 1.8 + 32.0
 
+def layout_text(lines):
+    height = 0
+    width = 0
+    for text, color, font in lines:
+        wh = font.getsize(text)
+        width = max(width, wh[0])
+        height = height + wh[1]
+
+    txtImg = Image.new('RGBA', (width + 1, height + 1), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(txtImg)
+    draw.fontmode = "1"
+    y_pos = -2
+    for text, color, font in lines:
+        draw.text((1, y_pos + 1), text, (0,0,0), font=font)
+        draw.text((0, y_pos),     text, color,   font=font)
+        y_pos = y_pos + font.getsize(text)[1]
+        if config["frame"].height < 64:
+            y_pos = y_pos -1
+    return txtImg
+    
 class Weather:
     api_url = "https://api.openweathermap.org/data/3.0/onecall?lat=39.9623348&lon=-75.1927043&appid="
     
-    def __init__(self, api_key=None, font=None, fontSm=None, fontLg=None, fontTime=None, image_cache=""):
+    def __init__(self, api_key=None, image_cache=""):
         self.api_key = api_key
         self.image_cache = image_cache
-        self.font = font
-        self.fontSm = fontSm
-        self.fontLg = fontLg
-        self.fontTime = fontTime
     
+    def font(self, size):
+        return ImageFont.truetype(config["config"]["fonts"]["weather"], size)
+
     def _update(self):
         try:
             r = urllib.request.urlopen(self.api_url + self.api_key)
@@ -60,12 +76,10 @@ class Weather:
         iconBox = Image.new('RGBA', (32, 32), (0, 0, 0))
 
         if self.night:
-            pass
-            # if time.time() > self._payload["daily"][0]["moonrise"] or time.time() < self._payload["daily"][0]["moonset"]:
-            #     phase = (((round(self._payload["daily"][0]["moon_phase"] * 8) % 8) + 11))
-            #     moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (self.image_cache, phase)).resize((20,20))
-            #     moonDim = ImageOps.expand(ImageEnhance.Brightness(moonImage).enhance(0.75), border=4, fill=(0,0,0,0))
-            #     iconBox.alpha_composite(moonDim, dest=(2, -2))
+            phase = (round(self._payload["daily"][0]["moon_phase"] * 8) % 8) + 11
+            moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (self.image_cache, phase)).resize((20,20))
+            moonDim = ImageEnhance.Brightness(moonImage).enhance(0.75)
+            iconBox.alpha_composite(moonDim, dest=(6, 6))
 
         else:
             url = "http://openweathermap.org/img/wn/%s.png" % (self._now["weather"][0]["icon"])
@@ -76,7 +90,7 @@ class Weather:
 
             iconImage = Image.open(filename)
             iconImage = iconImage.crop((3, 3, 45, 45)).resize((32, 32))
-            iconBox.alpha_composite(iconImage, dest=(0, -6))
+            iconBox.alpha_composite(iconImage, dest=(0, 0))
 
         return iconBox
 
@@ -102,45 +116,14 @@ class Weather:
     def humidity(self):
         return "%.0f%%" % self._payload["current"]["humidity"]
 
-    def clouds(self):
-        return self._now["clouds"]
-
     def wind_speed(self):
         return "%.0f mph" % (self._payload["current"]["wind_speed"] * 2.237)
-
-    # The screen is actually too low-res for this to look good
-    def wind_dir(self):
-        d = self._now["wind_deg"] - 45
-        if d < 0:
-            d = d + 360.0
-
-        wind_dirs = ["N", "E", "S", "W"]
-        return wind_dirs[int(d / 90)]
 
     def pressure(self):
         return "%.1f\"" % (self._payload["current"]["pressure"] * 0.0295301)
 
-    def layout_text(self, lines):
-        height = 0
-        width = 0
-        for text, color, font in lines:
-            wh = font.getsize(text)
-            width = max(width, wh[0])
-            height = height + wh[1]
 
-        txtImg = Image.new('RGBA', (width + 1, height + 1), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(txtImg)
-        draw.fontmode = "1"
-        y_pos = -2
-        for text, color, font in lines:
-            draw.text((1, y_pos + 1), text, (0,0,0), font=font)
-            draw.text((0, y_pos),     text, color,   font=font)
-            y_pos = y_pos + font.getsize(text)[1]
-            if config["frame"].height < 64:
-                y_pos = y_pos -1
-        return txtImg
-
-    def image(self):
+    def weather_summary(self):
         canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
         draw = ImageDraw.Draw(canvas)
         
@@ -164,11 +147,6 @@ class Weather:
             except KeyError:
                 pass
 
-        iconImage = self.icon()
-        # We're replaceing the entire right side of
-        # the image, so no need for alpha blending
-        canvas.paste(iconImage, (31, 5))
-
         # A little indicator of rain in the next hour. Each pixel represents two minutes.
         for m in range(32):
             try: # one time the payload didn't include minutely data...
@@ -181,14 +159,14 @@ class Weather:
             except (KeyError, IndexError):
                 pass
 
-        txtImg = self.layout_text([ (self.temp(),       hsluv2rgb(69.0, 75.0, 75.0),  self.fontLg),
-                                    (self.humidity(),   hsluv2rgb(139.9, 75.0, 50.0), self.fontSm),
-                                    (self.wind_speed(), hsluv2rgb(183.8, 75.0, 50.0), self.fontSm),
-                                    (self.pressure(),   hsluv2rgb(128.0, 0.0, 50.0),  self.fontSm) ])
+        txtImg = layout_text([ (self.temp(),       hsluv2rgb(69.0, 75.0, 75.0),  self.font(12)),
+                                (self.humidity(),   hsluv2rgb(139.9, 75.0, 50.0), self.font(7)),
+                                (self.wind_speed(), hsluv2rgb(183.8, 75.0, 50.0), self.font(7)),
+                                (self.pressure(),   hsluv2rgb(128.0, 0.0, 50.0),  self.font(7)) ])
 
-        canvas.alpha_composite(txtImg, dest=(0, 0))
+        canvas.alpha_composite(txtImg, dest=(0, 1))
 
-        return canvas.convert('RGB')
+        return canvas
 
     def planets(self):
         ts = load.timescale()
@@ -242,9 +220,19 @@ class Weather:
                 if planet_name == "moon":
                     phase = (((round(self._payload["daily"][0]["moon_phase"] * 8) % 8) + 11))
                     moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (self.image_cache, phase)).resize((12,12))
-                    moonDim = ImageOps.expand(ImageEnhance.Brightness(moonImage).enhance(0.75))
+                    moonDim = ImageEnhance.Brightness(moonImage).enhance(0.75)
                     canvas.alpha_composite(moonDim, dest=(x-6, y-6))
                 else:
                     draw.ellipse((x-size, y-size, x+size, y+size), fill=color)
 
         return canvas.resize((64, 32), resample=Image.ANTIALIAS)
+
+    def extreme(self):
+        txtImg = Image.new('RGBA', (32, 32), (0, 0, 0, 0))
+        if config["frame"].height < 64:
+            icon = self.icon().resize((16,16))
+            txtImg.paste(icon, (14,0))
+        draw = ImageDraw.Draw(txtImg)
+        draw.fontmode = None
+        draw.text((2, 0), self.feelslike(), (255, 255, 255), font=self.font(7))
+        return txtImg
