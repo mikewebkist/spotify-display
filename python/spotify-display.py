@@ -53,6 +53,7 @@ class Frame:
         self.options.hardware_mapping = "adafruit-hat-pwm"
         self.options.rows = int(config["config"]["matrix"]["height"])
         self.options.cols = int(config["config"]["matrix"]["width"])
+        self.gamma = float(config["config"]["matrix"]["gamma"])
 
         self.matrix = RGBMatrix(options=self.options)
         self.offscreen_canvas = self.matrix.CreateFrameCanvas()
@@ -68,7 +69,8 @@ class Frame:
         padding_top = int(config["config"]["matrix"]["padding_top"])
         
         def gamma(value):
-            return round(pow(value / 255.0, 1.5) * 255.0)
+            return round(pow(value / 255.0, self.gamma) * 255.0)
+
         canvas = Image.eval(canvas, gamma)
 
         if config["weather"].night:
