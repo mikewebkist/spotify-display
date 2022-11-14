@@ -139,11 +139,15 @@ class Weather:
                 draw.point((30, x+4), fill=hsluv2rgb(231.0, 100.0, 25.0))
             else:
                 draw.point((30, x+4), fill=hsluv2rgb(128.0, 0.0, 25.0))
+
+            if self.hour(x)["temp"] <= 273.15:
+                draw.point((29, x+4), fill=hsluv2rgb(231.0, 100.0, 25.0))
+            elif self.hour(x)["temp"] >= 310.928:
+                draw.point((29, x+4), fill=hsluv2rgb(12.2, 100.0, 25.0))
+
             try:
                 if self.hour(x)["rain"]['1h'] > 0.0:
                     draw.point((31, x+4), fill=hsluv2rgb(231.0, 100.0, 50.0))
-                else:
-                    draw.point((31, x+4), fill=hsluv2rgb(231.0, 0.0, 25.0))
             except KeyError:
                 pass
 
