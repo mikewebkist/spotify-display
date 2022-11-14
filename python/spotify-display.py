@@ -59,10 +59,18 @@ class Frame:
         self.width = self.options.cols
         self.height = self.options.rows - int(config["config"]["matrix"]["padding_top"])
     
+    @property
+    def square(self):
+        return self.options.cols == self.options.rows
+
     def swap(self, canvas):
         padding_left = int(config["config"]["matrix"]["padding_left"])
         padding_top = int(config["config"]["matrix"]["padding_top"])
-                
+        
+        def gamma(value):
+            return round(pow(value / 255.0, 1.5) * 255.0)
+        canvas = Image.eval(canvas, gamma)
+
         if config["weather"].night:
             canvas = ImageEnhance.Brightness(canvas).enhance(0.5)
 
@@ -101,9 +109,9 @@ def clock():
 
     draw.fontmode = None
     
-    draw.text((32 - (t_width >> 1) + 2, 9 - (t_height >> 1) + 1),
+    draw.text((32 - (t_width >> 1) + 2, 10 - (t_height >> 1) + 1),
             mytime, hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 5), font=ttfFontTime)
-    draw.text((32 - (t_width >> 1), 9 - (t_height >> 1)),
+    draw.text((32 - (t_width >> 1), 10 - (t_height >> 1)),
             mytime, hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 50, 75), font=ttfFontTime)
 
     return timeImg
@@ -155,7 +163,7 @@ async def main():
             canvas.paste(weather.icon(), (32, 0))
 
             # On large screens, show a small clock and the planet paths or a big clock
-            if config["frame"].height == 64:
+            if config["frame"].square:
                 if weather.night:
                     canvas.paste(weather.planets(), (0,32))
                     canvas.alpha_composite(small_clock(), dest=(32, 0))
