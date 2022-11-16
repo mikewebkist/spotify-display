@@ -80,29 +80,17 @@ class Frame:
         self.offscreen_canvas.SetImage(canvas, padding_left, padding_top)
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
-def brighten(r, g, b):
+def brighten(rgb):
+    r, g, b = rgb
     h, s, v = rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
     v = min(1.0, v * 1.5)
     r, g, b = hsv_to_rgb(h, s, v)
     return (int(r * 255), int(g * 255), int(b * 255))
 
-def temp_color(temp):
-    temp = weatherimport.ktof(temp)
-    if temp < 32:
-        return (29,49,92)
-    elif temp < 50:
-        return (32,97,128)
-    elif temp < 70:
-        return (155,153,106)
-    elif temp < 90:
-        return (175,91,60)
-    else:
-        return (139,23,60)
-
 def small_clock():
     timeImg = Image.new('RGBA', (32, 32), (0,0,0,0))
     draw = ImageDraw.Draw(timeImg)
-    color = brighten(*temp_color(config["weather"]._payload["current"]["temp"]))
+    color = brighten(config["weather"].temp_color())
     draw.fontmode = None
     
     t_width, t_height = ttfFontTime.getsize(datetime.now().strftime("%I"))
@@ -123,17 +111,17 @@ def clock():
     timeImg = Image.new('RGBA', (64, 30), (0,0,0,0))
     draw = ImageDraw.Draw(timeImg)
 
-    draw.rectangle([(0,0), (64,32)], fill=hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 25))
+    draw.rectangle([(0,0), (64,32)], fill=config["weather"].temp_color())
 
     t_width = ttfFontTime.getsize(mytime)[0]
     t_height = ttfFontTime.getsize(mytime)[1]
 
     draw.fontmode = None
     
-    draw.text((32 - (t_width >> 1) + 2, 10 - (t_height >> 1) + 1),
-            mytime, hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 100, 5), font=ttfFontTime)
+    draw.text((32 - (t_width >> 1) + 1, 10 - (t_height >> 1) + 1),
+            mytime, (0,0,0), font=ttfFontTime)
     draw.text((32 - (t_width >> 1), 10 - (t_height >> 1)),
-            mytime, hpluv2rgb((ts % cycle_time) / cycle_time * 360.0, 50, 75), font=ttfFontTime)
+            mytime, brighten(config["weather"].temp_color()), font=ttfFontTime)
 
     return timeImg
 
@@ -186,7 +174,7 @@ async def main():
             # On large screens, show a small clock and the planet paths or a big clock
             if config["frame"].square:
                 if weather.night:
-                    canvas.paste(weather.planets(), (0,32))
+                    canvas.alpha_composite(weather.planets(), dest=(0,32))
                     canvas.alpha_composite(small_clock(), dest=(32, 0))
                 else:
                     canvas.paste(clock(), (0,34))

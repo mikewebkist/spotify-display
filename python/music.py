@@ -109,6 +109,8 @@ class PlexTrack(Track):
             image = Image.open(processed)
         else:
             art_url = self.item.parentThumb or self.item.grandparentThumb
+            if not art_url:
+                return super().get_image()
             url = config["config"]["plex"]["base"] + art_url
             path = plexapi.utils.download(url, config["config"]["plex"]["token"], filename=str(self.album_id), savepath="/tmp")
             try:
@@ -310,7 +312,7 @@ class Music:
         draw = ImageDraw.Draw(txtImg)
         y_pos = 0
         for line in lines:
-            draw.text((2, y_pos + 1), line, (0, 0, 0, 196), font=self.font())
-            draw.text((1, y_pos), line, (255, 255, 255, 196), font=self.font())
+            draw.text((2, y_pos + 1), line, (0, 0, 0), font=self.font())
+            draw.text((1, y_pos), line, (255, 255, 255), font=self.font())
             y_pos = y_pos + self.font().getsize(line)[1]
         return txtImg

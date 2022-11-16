@@ -39,7 +39,20 @@ def layout_text(lines):
         if config["frame"].height < 64:
             y_pos = y_pos -1
     return txtImg
-    
+
+def temp_color(temp):
+    temp = ktof(temp)
+    if temp < 32:
+        return (29,49,92)
+    elif temp < 50:
+        return (32,97,128)
+    elif temp < 70:
+        return (155,153,106)
+    elif temp < 90:
+        return (175,91,60)
+    else:
+        return (139,23,60)
+
 class Weather:
     api_url = "https://api.openweathermap.org/data/3.0/onecall?lat=39.9623348&lon=-75.1927043&appid="
     
@@ -72,6 +85,9 @@ class Weather:
     def night(self):
         return time.time() > self._now["sunset"] or time.time() < self._now["sunrise"]
 
+    def temp_color(self):
+        return temp_color(self._payload["current"]["temp"])
+        
     def icon(self):
         iconBox = Image.new('RGBA', (32, 32), (0, 0, 0))
 
@@ -122,7 +138,6 @@ class Weather:
     def pressure(self):
         return "%.1f\"" % (self._payload["current"]["pressure"] * 0.0295301)
 
-
     def weather_summary(self):
         canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
         draw = ImageDraw.Draw(canvas)
@@ -132,18 +147,7 @@ class Weather:
             if t[3] % 6 == 0:
                 draw.line([(29, x+4), (31, x+4)], fill=hsluv2rgb(128.0,0.0,25.0))
 
-            diff = self.hour(x)["temp"] - self.hour(0)["temp"]
-            if diff > 1.0:
-                draw.point((30, x+4), fill=hsluv2rgb(12.2, 100.0, 25.0))
-            elif diff < -1.0:
-                draw.point((30, x+4), fill=hsluv2rgb(231.0, 100.0, 25.0))
-            else:
-                draw.point((30, x+4), fill=hsluv2rgb(128.0, 0.0, 25.0))
-
-            if self.hour(x)["temp"] <= 273.15:
-                draw.point((29, x+4), fill=hsluv2rgb(231.0, 100.0, 25.0))
-            elif self.hour(x)["temp"] >= 310.928:
-                draw.point((29, x+4), fill=hsluv2rgb(12.2, 100.0, 25.0))
+            draw.point((30, x+4), fill=self.temp_color())
 
             try:
                 if self.hour(x)["rain"]['1h'] > 0.0:
@@ -182,12 +186,12 @@ class Weather:
         philly = earth + wgs84.latlon(39.9623348 * N, 75.1927043 * W, elevation_m=10.59)
 
         # Supersampling at 2x
-        canvas = Image.new('RGBA', (128, 64), (0, 0, 0))
+        canvas = Image.new('RGBA', (128, 64), (0, 0, 32))
         draw = ImageDraw.Draw(canvas)
-        draw.line((32, 0, 32, 64), fill=(4,4,4))
-        draw.line((64, 0, 64, 64), fill=(4,4,4))
-        draw.line((96, 0, 96, 64), fill=(4,4,4))
-        # draw.rectangle((0, 28, 64, 32), fill=(8,32,8))
+
+        draw.line((32, 0, 32, 64), fill=(32,32,32))
+        draw.line((64, 0, 64, 64), fill=(32,32,32))
+        draw.line((96, 0, 96, 64), fill=(32,32,32))
         plot_planets = [ 
             ("moon", (128,128,128), 6), 
             ("mercury", (16,16,16), 1), 
@@ -197,20 +201,20 @@ class Weather:
             ("saturn barycenter", (128,128,4), 3)
             ]
 
-        for planet_name, color, size in plot_planets:
+        # for planet_name, color, size in plot_planets:
             # this is going to be all sorts of messed up after midnight
-            lines = []
-            for t_local in range(self._payload["daily"][0]["sunset"], self._payload["daily"][1]["sunrise"], 60 * 60):
-                dt_local = utc.localize(datetime.fromtimestamp(t_local))
-                t = ts.from_datetime(dt_local)
+            # lines = []
+            # for t_local in range(self._payload["daily"][0]["sunset"], self._payload["daily"][1]["sunrise"], 60 * 60):
+            #     dt_local = utc.localize(datetime.fromtimestamp(t_local))
+            #     t = ts.from_datetime(dt_local)
 
-                astrometric = philly.at(t).observe(planets[planet_name])
-                alt, az, distance = astrometric.apparent().altaz()
-                if alt.degrees > 0.0:
-                    x = int(az.degrees * 128 / 360)
-                    y = int(56 - (alt.degrees * 56 / 90))
-                    lines.append((x, y))
-            draw.line(lines, fill=(64,64,64), joint="curve")
+            #     astrometric = philly.at(t).observe(planets[planet_name])
+            #     alt, az, distance = astrometric.apparent().altaz()
+            #     if alt.degrees > 0.0:
+            #         x = int(az.degrees * 128 / 360)
+            #         y = int(56 - (alt.degrees * 56 / 90))
+            #         lines.append((x, y))
+            # draw.line(lines, fill=(32,32,32))
 
         for planet_name, color, size in plot_planets:
             t = ts.now()
@@ -233,10 +237,11 @@ class Weather:
 
     def extreme(self):
         txtImg = Image.new('RGBA', (32, 32), (0, 0, 0, 0))
-        if config["frame"].height < 64:
+        if not config["frame"].square:
             icon = self.icon().resize((16,16))
-            txtImg.paste(icon, (14,0))
+            txtImg.alpha_composite(icon, dest=(14,0))
         draw = ImageDraw.Draw(txtImg)
-        draw.fontmode = None
-        draw.text((2, 0), self.feelslike(), (255, 255, 255), font=self.font(7))
+        # draw.fontmode = "1"
+        draw.text((3, 1), self.feelslike(), (0, 0, 0), font=self.font(9))
+        draw.text((2, 0), self.feelslike(), self.temp_color(), font=self.font(9))
         return txtImg
