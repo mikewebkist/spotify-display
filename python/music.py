@@ -101,6 +101,7 @@ class PlexTrack(Track):
         self.track_id = item.ratingKey
         self.duration = client.timeline.duration / 1000.0
         self.progress = client.timeline.time / 1000.0
+        self.art_url = None
 
 
     def get_image(self):

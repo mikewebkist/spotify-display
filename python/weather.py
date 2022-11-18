@@ -241,7 +241,7 @@ class Weather:
             icon = self.icon().resize((16,16))
             txtImg.alpha_composite(icon, dest=(14,0))
         draw = ImageDraw.Draw(txtImg)
-        # draw.fontmode = "1"
-        draw.text((3, 1), self.feelslike(), (0, 0, 0), font=self.font(9))
+        draw.fontmode = "1"
+        # draw.text((3, 1), self.feelslike(), (0, 0, 0), font=self.font(10))
         draw.text((2, 0), self.feelslike(), self.temp_color(), font=self.font(9))
         return txtImg
