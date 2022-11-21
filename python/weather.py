@@ -35,15 +35,19 @@ def layout_text(lines):
     for text, color, font in lines:
         draw.text((1, y_pos + 1), text, (0,0,0), font=font)
         draw.text((0, y_pos),     text, color,   font=font)
-        y_pos = y_pos + font.getsize(text)[1]
-        if config["frame"].height < 64:
-            y_pos = y_pos -1
+        y_pos = y_pos + font.getsize(text)[1] - 1
     return txtImg
 
 def temp_color(temp):
     temp = ktof(temp)
-    if temp < 32:
-        return (29,49,92)
+    if temp < 25:
+        return (57,81,127)
+    elif temp < 30:
+        return (47,71,117)
+    elif temp < 35:
+        return (38,67,111)
+    elif temp < 40:
+        return (37,79,119)
     elif temp < 50:
         return (32,97,128)
     elif temp < 70:
@@ -194,11 +198,11 @@ class Weather:
         draw.line((96, 0, 96, 64), fill=(32,32,32))
         plot_planets = [ 
             ("moon", (128,128,128), 6), 
-            ("mercury", (16,16,16), 1), 
-            ("venus", (32,32,128), 2), 
-            ("mars", (128,4,4), 2), 
-            ("jupiter barycenter", (128,64,4), 3), 
-            ("saturn barycenter", (128,128,4), 3)
+            ("mercury", (96,96,96), 1), 
+            ("venus", (64,64,128), 2), 
+            ("mars", (128,32,32), 2), 
+            ("jupiter barycenter", (128,64,32), 3), 
+            ("saturn barycenter", (128,128,32), 3)
             ]
 
         # for planet_name, color, size in plot_planets:

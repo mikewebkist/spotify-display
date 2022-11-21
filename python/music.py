@@ -13,6 +13,8 @@ import requests
 from plexapi.server import PlexServer
 import plexapi
 import random
+from datetime import datetime
+from time import time
 from config import config
 
 logging.basicConfig(level=logging.INFO)
@@ -33,10 +35,17 @@ class Track:
         self.art_url = art
         self.is_live = False
         self.track_id = "%s/%s" % (self.track, self.artist)
+        self.label = None
+        self.year = None
+        self.checktime = time()
 
     @property
     def timeleft(self):
-        return self.duration - self.progress
+        return self.duration - self.progress - (time() - self.checktime)
+
+    @property
+    def timein(self):
+        return self.progress
 
     def recheck_in(self):
         if self.timeleft < 0:
@@ -44,7 +53,7 @@ class Track:
         if self.progress < 15.0:
             return 1.0
         elif self.timeleft > 30.0:
-            return 30.0
+            return 5.0
         elif self.timeleft > 5.0:
             return self.timeleft
         else:
@@ -96,12 +105,15 @@ class PlexTrack(Track):
         self.is_live = False
         self.track = item.title
         self.album = item.album().title
+        self.label = item.album().studio
+        self.year = item.album().year
         self.artist = item.originalTitle or item.artist().title
         self.album_id = item.parentRatingKey
         self.track_id = item.ratingKey
         self.duration = client.timeline.duration / 1000.0
         self.progress = client.timeline.time / 1000.0
         self.art_url = None
+        self.checktime = time()
 
 
     def get_image(self):
@@ -138,6 +150,10 @@ class CastTrack(Track):
         self.duration = cast.media_controller.status.duration
         self.progress = cast.media_controller.status.adjusted_current_time
         self.track_id = "%s/%s" % (self.track, self.artist)
+        self.label = None
+        self.year = None
+        self.checktime = time()
+
         if cast.media_controller.status.images:
             self.art_url = cast.media_controller.status.images[0].url
         elif cast.media_controller.status.media_custom_data.get("providerIdentifier") == "com.plexapp.plugins.library":
@@ -170,6 +186,9 @@ class SpotifyTrack(Track):
         self.art_url = meta["item"]["album"]["images"][0]["url"]
         self.duration = meta["item"]["duration_ms"] / 1000.0
         self.progress = meta["progress_ms"] / 1000.0
+        self.label = None
+        self.year = None
+        self.checktime = time()
 
     @property
     def track_id(self):
@@ -207,6 +226,8 @@ class Music:
     def font(self, size=8):
         return ImageFont.truetype(config["config"]["fonts"]["music"], size)
 
+    def italic(self, size=8):
+        return ImageFont.truetype(config["config"]["fonts"]["music_italic"], size)
 
     def nowplaying(self):
         return self.songinfo
@@ -304,16 +325,27 @@ class Music:
     def layout_text(self, lines):
         height = 0
         width = 0
-        for line in lines:
-            wh = self.font().getsize(line)
+        for line, font in lines:
+            wh = font.getsize(line)
             width = max(width, wh[0])
             height = height + wh[1]
 
         txtImg = Image.new('RGBA', (width + 2, height + 1), (255, 255, 255, 0))
         draw = ImageDraw.Draw(txtImg)
         y_pos = 0
-        for line in lines:
-            draw.text((2, y_pos + 1), line, (0, 0, 0), font=self.font())
-            draw.text((1, y_pos), line, (255, 255, 255), font=self.font())
-            y_pos = y_pos + self.font().getsize(line)[1]
+        for line, font in lines:
+            draw.text((2, y_pos + 1), line, (0, 0, 0), font=font)
+            draw.text((1, y_pos), line, (255, 255, 255), font=font)
+            y_pos = y_pos + font.getsize(line)[1]
         return txtImg
+
+    def track_text(self):
+        lines = []
+        lines.append((self.nowplaying().artist, self.font()))
+        lines.append(('"' + self.nowplaying().track + '"', self.font()))
+        if config["frame"].square:
+            lines.append((self.nowplaying().album, self.italic()))
+            if self.nowplaying().label and self.nowplaying().year:
+                lines.append(("%s (%d)" % (self.nowplaying().label, self.nowplaying().year), self.font()))
+        return lines
+        )
