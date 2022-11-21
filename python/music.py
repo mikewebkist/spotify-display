@@ -348,4 +348,3 @@ class Music:
             if self.nowplaying().label and self.nowplaying().year:
                 lines.append(("%s (%d)" % (self.nowplaying().label, self.nowplaying().year), self.font()))
         return lines
-        )
