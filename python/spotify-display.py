@@ -36,7 +36,7 @@ except KeyError:
 
 image_cache = "%s/imagecache" % (basepath)
 
-ttfFontTime = ImageFont.truetype(config["config"]["fonts"]["time"], 18)
+ttfFontTime = ImageFont.truetype(config["config"]["fonts"]["time"], 23)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -105,8 +105,6 @@ def small_clock():
 
 def clock():
     mytime=datetime.now().strftime("%-I:%M")
-    ts = datetime.now().timestamp()
-    cycle_time = 120.0
 
     timeImg = Image.new('RGBA', (64, 30), (0,0,0,0))
     draw = ImageDraw.Draw(timeImg)
@@ -117,10 +115,9 @@ def clock():
     t_height = ttfFontTime.getsize(mytime)[1]
 
     draw.fontmode = None
-    
-    draw.text((32 - (t_width >> 1) + 1, 10 - (t_height >> 1) + 1),
+    draw.text((32 - (t_width >> 1) + 1, 12 - (t_height >> 1) + 1),
             mytime, (0,0,0), font=ttfFontTime)
-    draw.text((32 - (t_width >> 1), 10 - (t_height >> 1)),
+    draw.text((32 - (t_width >> 1), 12 - (t_height >> 1)),
             mytime, brighten(config["weather"].temp_color()), font=ttfFontTime)
 
     return timeImg
@@ -136,7 +133,7 @@ async def main():
         if music.nowplaying():
             if music.new_song():
                 logger.info("now playing song: %s" % (music.nowplaying().track))
-                txtImg = music.layout_text([music.nowplaying().track, music.nowplaying().artist])
+                txtImg = music.layout_text(music.track_text())
 
             # Fade in new album covers
             if music.new_album():
@@ -150,18 +147,20 @@ async def main():
 
                 await asyncio.sleep(0)
 
-            # If either line of text is longer than the display, scroll
-            if txtImg.width >= frame.width:
-                for x in range(txtImg.width + 10 + frame.width):
+            # Only show credits at start and end of playback.
+            if music.nowplaying().timein < 15 or music.nowplaying().timeleft < 15:
+                # If either line of text is longer than the display, scroll
+                if txtImg.width >= frame.width:
+                    for x in range(txtImg.width + 10 + frame.width):
+                        bg = music.canvas()
+                        bg.alpha_composite(txtImg, dest=(frame.width - x, frame.height - 2 - txtImg.height))
+                        frame.swap(bg.convert('RGB'))
+                        time.sleep(0.0125) # Don't release thread until scroll is done
+                    await asyncio.sleep(1.0)
+                else:
                     bg = music.canvas()
-                    bg.alpha_composite(txtImg, dest=(frame.width - x, frame.height - 2 - txtImg.height))
+                    bg.alpha_composite(txtImg, dest=(0, frame.height - 2 - txtImg.height))
                     frame.swap(bg.convert('RGB'))
-                    time.sleep(0.0125) # Don't release thread until scroll is done
-                await asyncio.sleep(1.0)
-            else:
-                bg = music.canvas()
-                bg.alpha_composite(txtImg, dest=(0, frame.height - 2 - txtImg.height))
-                frame.swap(bg.convert('RGB'))
 
         # Nothing is playing
         else:
