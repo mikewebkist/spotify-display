@@ -27,17 +27,25 @@ if basepath == "":
 image_cache = "%s/imagecache" % (basepath)
 
 class Track:
-    def __init__(self, track="", album="", artist="", art=""):
-        self.track = track
-        self.album = album
-        self.artist = artist
-        self.album_id = "%s/%s" % (album, artist)
-        self.art_url = art
+    def __init__(self):
+        self.track = ""
+        self.album = ""
+        self.artist = ""
+        self.art_url = None
         self.is_live = False
-        self.track_id = "%s/%s" % (self.track, self.artist)
         self.label = None
         self.year = None
         self.checktime = time()
+        self.duration = 0
+        self.progress = 0
+
+    @property
+    def album_id(self):
+        return "%s/%s" % (self.album, self.artist)
+
+    @property
+    def track_id(self):
+        return "%s/%s" % (self.album, self.artist)
 
     @property
     def timeleft(self):
@@ -100,21 +108,20 @@ class Track:
 
 class PlexTrack(Track):
     def __init__(self, item, client=None):
-        self.item = item
-        self.client = client
-        self.is_live = False
+        super().__init__()
         self.track = item.title
         self.album = item.album().title
+        self.artist = item.originalTitle or item.artist().title
+        
+        # Plex specific instance variables
+        self.item = item
+        self.client = client
         self.label = item.album().studio
         self.year = item.album().year
-        self.artist = item.originalTitle or item.artist().title
         self.album_id = item.parentRatingKey
         self.track_id = item.ratingKey
         self.duration = client.timeline.duration / 1000.0
         self.progress = client.timeline.time / 1000.0
-        self.art_url = None
-        self.checktime = time()
-
 
     def get_image(self):
         processed = "%s/%s-%s.png" % (image_cache, self.__class__.__name__, self.album_id)
