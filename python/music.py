@@ -27,25 +27,33 @@ if basepath == "":
 image_cache = "%s/imagecache" % (basepath)
 
 class Track:
-    def __init__(self, track="", album="", artist="", art=""):
-        self.track = track
-        self.album = album
-        self.artist = artist
-        self.album_id = "%s/%s" % (album, artist)
-        self.art_url = art
-        self.is_live = False
-        self.track_id = "%s/%s" % (self.track, self.artist)
+    def __init__(self):
+        self.art_url = None
         self.label = None
         self.year = None
         self.checktime = time()
+        self._album_id = None
+        self._track_id = None
+
+    @property
+    def album_id(self):
+        return self._album_id or f"{self.album}/{self.artist}"
+
+    @property
+    def track_id(self):
+        return self._track_id or f"{self.track}/{self.artist}/{self.album}"
+
+    @property
+    def data_age(self):
+        return time() - self.checktime
 
     @property
     def timeleft(self):
-        return self.duration - self.progress - (time() - self.checktime)
+        return self.duration - self.progress - self.data_age
 
     @property
     def timein(self):
-        return self.progress
+        return self.progress + self.data_age
 
     def recheck_in(self):
         if self.timeleft < 0:
@@ -100,21 +108,20 @@ class Track:
 
 class PlexTrack(Track):
     def __init__(self, item, client=None):
-        self.item = item
-        self.client = client
-        self.is_live = False
+        super().__init__()
         self.track = item.title
         self.album = item.album().title
-        self.label = item.album().studio
-        self.year = item.album().year
         self.artist = item.originalTitle or item.artist().title
-        self.album_id = item.parentRatingKey
-        self.track_id = item.ratingKey
         self.duration = client.timeline.duration / 1000.0
         self.progress = client.timeline.time / 1000.0
-        self.art_url = None
-        self.checktime = time()
-
+        
+        # Plex specific instance variables
+        self.item = item
+        self.client = client
+        self.label = item.album().studio
+        self.year = item.album().year
+        self._album_id = item.parentRatingKey
+        self._track_id = item.ratingKey
 
     def get_image(self):
         processed = "%s/%s-%s.png" % (image_cache, self.__class__.__name__, self.album_id)
@@ -140,19 +147,16 @@ class PlexTrack(Track):
 
 class CastTrack(Track):
     def __init__(self, cast, meta):
-        self.cast = cast
-        self.meta = meta
-        self.plex_track = None
+        super().__init__()
         self.track = meta["title"] if "title" in meta else ""
         self.album = meta["albumName"] if "albumName" in meta else ""
         self.artist = meta["artist"] if "artist" in meta else meta["subtitle"] if "subtitle" in meta else ""
-        self.album_id = "%s/%s" % (self.album, self.artist)
         self.duration = cast.media_controller.status.duration
         self.progress = cast.media_controller.status.adjusted_current_time
-        self.track_id = "%s/%s" % (self.track, self.artist)
-        self.label = None
-        self.year = None
-        self.checktime = time()
+
+        self.cast = cast
+        self.meta = meta
+        self.plex_track = None
 
         if cast.media_controller.status.images:
             self.art_url = cast.media_controller.status.images[0].url
@@ -168,7 +172,7 @@ class CastTrack(Track):
         if self.cast.media_controller.status.stream_type_is_live:
             return -1
         else:
-            return self.duration - self.progress
+            return super().timeleft
 
     def get_image(self):
         if self.plex_track:
@@ -178,21 +182,17 @@ class CastTrack(Track):
 
 class SpotifyTrack(Track):
     def __init__(self, meta):
-        self.meta = meta
+        super().__init__()
         self.track = meta["item"]["name"]
         self.album = meta["item"]["album"]["name"]
         self.artist = ", ".join(map(lambda x: x["name"], meta["item"]["artists"]))
-        self.album_id = meta["item"]["album"]["id"]
-        self.art_url = meta["item"]["album"]["images"][0]["url"]
         self.duration = meta["item"]["duration_ms"] / 1000.0
         self.progress = meta["progress_ms"] / 1000.0
-        self.label = None
-        self.year = None
-        self.checktime = time()
 
-    @property
-    def track_id(self):
-        return self.meta["item"]["id"]
+        self.meta = meta
+        self._album_id = meta["item"]["album"]["id"]
+        self._track_id = meta["item"]["id"]
+        self.art_url = meta["item"]["album"]["images"][0]["url"]
 
 class Music:
     def __init__(self, devices=None, image_cache=""):
