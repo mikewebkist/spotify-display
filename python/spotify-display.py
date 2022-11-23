@@ -36,10 +36,12 @@ except KeyError:
 
 image_cache = "%s/imagecache" % (basepath)
 
-ttfFontTime = ImageFont.truetype(config["config"]["fonts"]["time"], 23)
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+  
+def font(size):
+    return ImageFont.truetype(config["config"]["fonts"]["time"], size)
 
 def hpluv2rgb(h,s,v):
     return tuple(int(i * 256) for i in hpluv_to_rgb([h, s , v]))
@@ -93,13 +95,13 @@ def small_clock():
     color = brighten(config["weather"].temp_color())
     draw.fontmode = None
     
-    t_width, t_height = ttfFontTime.getsize(datetime.now().strftime("%I"))
-    draw.text((17 - (t_width >> 1), 5 - (t_height >> 1) + 1), datetime.now().strftime("%I"), (0,0,0), font=ttfFontTime)
-    draw.text((16 - (t_width >> 1), 4 - (t_height >> 1) + 1), datetime.now().strftime("%I"), color, font=ttfFontTime)
+    t_width, t_height = font(18).getsize(datetime.now().strftime("%I"))
+    draw.text((17 - (t_width >> 1), 5 - (t_height >> 1) + 1), datetime.now().strftime("%I"), (0,0,0), font=font(18))
+    draw.text((16 - (t_width >> 1), 4 - (t_height >> 1) + 1), datetime.now().strftime("%I"), color, font=font(18))
 
-    t_width, t_height = ttfFontTime.getsize(datetime.now().strftime("%M"))
-    draw.text((17 - (t_width >> 1), 20 - (t_height >> 1) + 1), datetime.now().strftime("%M"), (0,0,0), font=ttfFontTime)
-    draw.text((16 - (t_width >> 1), 19 - (t_height >> 1) + 1), datetime.now().strftime("%M"), color, font=ttfFontTime)
+    t_width, t_height = font(18).getsize(datetime.now().strftime("%M"))
+    draw.text((17 - (t_width >> 1), 20 - (t_height >> 1) + 1), datetime.now().strftime("%M"), (0,0,0), font=font(18))
+    draw.text((16 - (t_width >> 1), 19 - (t_height >> 1) + 1), datetime.now().strftime("%M"), color, font=font(18))
 
     return timeImg
 
@@ -111,14 +113,14 @@ def clock():
 
     draw.rectangle([(0,0), (64,32)], fill=config["weather"].temp_color())
 
-    t_width = ttfFontTime.getsize(mytime)[0]
-    t_height = ttfFontTime.getsize(mytime)[1]
+    t_width = font(23).getsize(mytime)[0]
+    t_height = font(23).getsize(mytime)[1]
 
     draw.fontmode = None
-    draw.text((32 - (t_width >> 1) + 1, 12 - (t_height >> 1) + 1),
-            mytime, (0,0,0), font=ttfFontTime)
+    draw.text((32 - (t_width >> 1) + 2, 12 - (t_height >> 1) + 2),
+            mytime, (0,0,0), font=font(23))
     draw.text((32 - (t_width >> 1), 12 - (t_height >> 1)),
-            mytime, brighten(config["weather"].temp_color()), font=ttfFontTime)
+            mytime, brighten(config["weather"].temp_color()), font=font(23))
 
     return timeImg
 
