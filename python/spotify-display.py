@@ -136,6 +136,7 @@ async def main():
             if music.new_song():
                 logger.info("now playing song: %s" % (music.nowplaying().track))
                 txtImg = music.layout_text(music.track_text())
+                mtvtime = 0
 
             # Fade in new album covers
             if music.new_album():
@@ -149,15 +150,21 @@ async def main():
 
                 await asyncio.sleep(0)
 
+            if mtvtime:
+                start_end_credits = math.floor(30 / mtvtime) * mtvtime
+
             # Only show credits at start and end of playback.
-            if music.nowplaying().timein < 30 or music.nowplaying().timeleft < 30:
+            if music.nowplaying().timein < 30 or not mtvtime or (music.nowplaying().timeleft < (math.floor(30 / mtvtime) * mtvtime) and music.nowplaying().timeleft > 3):
                 # If either line of text is longer than the display, scroll
                 if txtImg.width >= frame.width:
+                    t0 = time.time()
                     for x in range(txtImg.width + 10 + frame.width):
                         bg = music.canvas()
                         bg.alpha_composite(txtImg, dest=(frame.width - x, frame.height - 2 - txtImg.height))
                         frame.swap(bg.convert('RGB'))
                         time.sleep(0.0125) # Don't release thread until scroll is done
+                    t1 = time.time()
+                    mtvtime = max(mtvtime, t1 - t0)
                     await asyncio.sleep(1.0)
                 else:
                     bg = music.canvas()
