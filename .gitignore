@@ -19,3 +19,4 @@ python/imagecache
 python/tokens
 python/local.config
 __pycache__
+fonts/

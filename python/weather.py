@@ -31,11 +31,11 @@ def layout_text(lines):
     txtImg = Image.new('RGBA', (width + 1, height + 1), (0, 0, 0, 0))
     draw = ImageDraw.Draw(txtImg)
     draw.fontmode = "1"
-    y_pos = -2
+    y_pos = 0
     for text, color, font in lines:
-        draw.text((1, y_pos + 1), text, (0,0,0), font=font)
-        draw.text((0, y_pos),     text, color,   font=font)
-        y_pos = y_pos + font.getsize(text)[1] - 1
+        draw.text((2, y_pos + 1), text, (0,0,0), font=font)
+        draw.text((1, y_pos),     text, color,   font=font)
+        y_pos = y_pos + font.getsize(text)[1]
     return txtImg
 
 def temp_color(temp):
@@ -48,8 +48,14 @@ def temp_color(temp):
         return (38,67,111)
     elif temp < 40:
         return (37,79,119)
+    elif temp < 45:
+        return (39,91,128)
     elif temp < 50:
-        return (32,97,128)
+        return (39,103,138)
+    elif temp < 55:
+        return (40,117,147)
+    elif temp < 60:
+        return (67,129,144)
     elif temp < 70:
         return (155,153,106)
     elif temp < 90:
@@ -151,7 +157,7 @@ class Weather:
             if t[3] % 6 == 0:
                 draw.line([(29, x+4), (31, x+4)], fill=hsluv2rgb(128.0,0.0,25.0))
 
-            draw.point((30, x+4), fill=self.temp_color())
+            draw.point((30, x+4), fill=temp_color(self.hour(x)["temp"]))
 
             try:
                 if self.hour(x)["rain"]['1h'] > 0.0:
@@ -172,9 +178,9 @@ class Weather:
                 pass
 
         txtImg = layout_text([ (self.temp(),       hsluv2rgb(69.0, 75.0, 75.0),  self.font(12)),
-                                (self.humidity(),   hsluv2rgb(139.9, 75.0, 50.0), self.font(7)),
-                                (self.wind_speed(), hsluv2rgb(183.8, 75.0, 50.0), self.font(7)),
-                                (self.pressure(),   hsluv2rgb(128.0, 0.0, 50.0),  self.font(7)) ])
+                                (self.humidity(),   hsluv2rgb(139.9, 75.0, 50.0), self.font(8)),
+                                (self.wind_speed(), hsluv2rgb(183.8, 75.0, 50.0), self.font(8)),
+                                (self.pressure(),   hsluv2rgb(128.0, 0.0, 50.0),  self.font(8)) ])
 
         canvas.alpha_composite(txtImg, dest=(0, 1))
 

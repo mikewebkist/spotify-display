@@ -16,6 +16,7 @@ import random
 from datetime import datetime
 from time import time
 from config import config
+from heospy import HeosPlayer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,6 +35,8 @@ class Track:
         self.checktime = time()
         self._album_id = None
         self._track_id = None
+        self.duration = -1
+        self.progress = -1
 
     @property
     def album_id(self):
@@ -49,16 +52,22 @@ class Track:
 
     @property
     def timeleft(self):
-        return self.duration - self.progress - self.data_age
+        if self.duration < 0 or self.progress < 0:
+            return -1
+        else:
+            return self.duration - self.progress - self.data_age
 
     @property
     def timein(self):
-        return self.progress + self.data_age
+        if self.duration < 0 or self.progress < 0:
+            return -1
+        else:
+            return self.progress + self.data_age
 
     def recheck_in(self):
         if self.timeleft < 0:
-            return 30.0
-        if self.progress < 15.0:
+            return 5.0
+        elif self.progress < 15.0:
             return 1.0
         elif self.timeleft > 30.0:
             return 5.0
@@ -79,13 +88,18 @@ class Track:
 
         m = url.rsplit('/', 1)
         processed = "%s/%s-%s.png" % (image_cache, self.__class__.__name__, m[-1])
-        if os.path.exists(processed):
-            image = Image.open(processed)
-        else:
-            with urllib.request.urlopen(url) as rawimage:
-                image = ImageOps.pad(Image.open(rawimage), size=(64,64), method=Image.LANCZOS, centering=(1,0))
-                image.save(processed, "PNG")
-        return image
+        try:
+            if (time() - os.path.getmtime(processed)) < (7 * 24 * 60 * 60):
+                return Image.open(processed)
+            else:
+                os.remove(processed)
+        except OSError:
+            pass
+
+        with urllib.request.urlopen(url) as rawimage:
+            image = ImageOps.pad(Image.open(rawimage), size=(64,64), method=Image.LANCZOS, centering=(1,0))
+            image.save(processed, "PNG")
+            return image
 
     @property
     def image(self):
@@ -109,6 +123,9 @@ class Track:
 class PlexTrack(Track):
     def __init__(self, item, client=None):
         super().__init__()
+        if not isinstance(item, plexapi.audio.Audio):
+            raise TypeError("item must be a plexapi.audio.Audio object")
+
         self.track = item.title
         self.album = item.album().title
         self.artist = item.originalTitle or item.artist().title
@@ -125,24 +142,29 @@ class PlexTrack(Track):
 
     def get_image(self):
         processed = "%s/%s-%s.png" % (image_cache, self.__class__.__name__, self.album_id)
-        if os.path.exists(processed):
-            image = Image.open(processed)
-        else:
-            art_url = self.item.parentThumb or self.item.grandparentThumb
-            if not art_url:
-                return super().get_image()
-            url = config["config"]["plex"]["base"] + art_url
-            path = plexapi.utils.download(url, config["config"]["plex"]["token"], filename=str(self.album_id), savepath="/tmp")
-            try:
-                image = Image.open(path)
-            except PIL.UnidentifiedImageError as err:
-                return super().get_image()
+        try:
+            if (time() - os.path.getmtime(processed)) < (7 * 24 * 60 * 60):
+                return Image.open(processed)
+            else:
+                os.remove(processed)
+        except OSError:
+            pass
 
-            image = ImageOps.pad(image, size=(64,64), centering=(1,0))
-            if image.mode != "RGB":
-                image = image.convert("RGB")
-            image.save(processed, "PNG")
-            os.remove(path)
+        art_url = self.item.parentThumb or self.item.grandparentThumb
+        if not art_url:
+            return super().get_image()
+        url = config["config"]["plex"]["base"] + art_url
+        path = plexapi.utils.download(url, config["config"]["plex"]["token"], filename=str(self.album_id), savepath="/tmp")
+        try:
+            image = Image.open(path)
+        except PIL.UnidentifiedImageError as err:
+            return super().get_image()
+
+        image = ImageOps.pad(image, size=(64,64), centering=(1,0))
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        image.save(processed, "PNG")
+        os.remove(path)
         return image
 
 class CastTrack(Track):
@@ -190,9 +212,20 @@ class SpotifyTrack(Track):
         self.progress = meta["progress_ms"] / 1000.0
 
         self.meta = meta
+        if meta["item"]["album"]["release_date"]:
+            self.year = int(meta["item"]["album"]["release_date"][:4])
         self._album_id = meta["item"]["album"]["id"]
         self._track_id = meta["item"]["id"]
         self.art_url = meta["item"]["album"]["images"][0]["url"]
+
+class HeosTrack(Track):
+    def __init__(self, payload):
+        super().__init__()
+        self.track = payload["song"]
+        self.album = payload["album"]
+        self.artist = payload["artist"]
+        self.payload = payload
+        self.art_url = payload["image_url"]
 
 class Music:
     def __init__(self, devices=None, image_cache=""):
@@ -218,10 +251,15 @@ class Music:
         user = self._spotify.current_user()
         logger.info("Now Playing for %s [%s]" % (user["display_name"], user["id"]))
 
+        try:
+            self.heos = HeosPlayer(config_file="/home/pi/.heospy/config.json")
+        except:
+            logging.error("HEOS problem...")
+
         self.last_album_id = ""
         self.last_track_id = ""
         self.albumArtCached = None
-        self.songinfo = None
+        self.playing = {}
     
     def font(self, size=8):
         return ImageFont.truetype(config["config"]["fonts"]["music"], size)
@@ -230,11 +268,14 @@ class Music:
         return ImageFont.truetype(config["config"]["fonts"]["music_italic"], size)
 
     def nowplaying(self):
-        return self.songinfo
+        for type in ["heos", "plex", "cast", "spotify"]:
+            if type in self.playing and self.playing[type]:
+                return self.playing[type][0][1]
+        return None
 
     def get_playing_plex(self):
-        if self.songinfo and type(self.songinfo) != PlexTrack:
-            return self.songinfo.recheck_in() + 1.0
+        # Reset playing objects
+        self.playing["plex"] = []
 
         try:
             for client in self.plex.clients():
@@ -243,8 +284,15 @@ class Music:
                 if not client.isPlayingMedia(includePaused=False):
                     continue
                 item = self.plex.fetchItem(client.timeline.key)
-                self.songinfo = PlexTrack(item=item, client=client)
-                return self.songinfo.recheck_in()
+                self.playing["plex"].append((client.title, PlexTrack(item=item, client=client)))
+            
+            if self.playing["plex"]:
+                print(self.playing)
+                return min(x[1].recheck_in() for x in self.playing["plex"])
+
+        except TypeError as err:
+            logger.warn(f"Plex server TypeError: {err}")
+            return 30.0
         except requests.exceptions.ConnectionError as err:
             logger.error(f"Plex server ConnectionError: {err}")
             return 30.0
@@ -252,12 +300,10 @@ class Music:
             logger.error(f"Plex server error: {err}")
             return 30.0
 
-        self.songinfo = None
         return 20.0
 
     def get_playing_spotify(self):
-        if self.songinfo and type(self.songinfo) != SpotifyTrack:
-            return self.songinfo.recheck_in() + 1.0
+        self.playing["spotify"] = []
 
         try:
             meta = self._spotify.current_user_playing_track()
@@ -270,26 +316,41 @@ class Music:
             return 60.0
 
         if meta and meta["is_playing"] and meta["item"]:
-            self.songinfo = SpotifyTrack(meta)
-            return self.songinfo.recheck_in()
+            self.playing["spotify"].append(("Spotify", SpotifyTrack(meta)))
+            return min(x[1].recheck_in() for x in self.playing["spotify"])
         else:
-            self.songinfo = None
             return 60.0
             
     def get_playing_chromecast(self):
-        if self.songinfo and type(self.songinfo) != CastTrack:
-            return self.songinfo.recheck_in() + 1.0
+        self.playing["cast"] = []
 
         for cast in self.chromecasts:
             cast.wait()
             if cast.media_controller.status.player_is_playing:
                 meta = cast.media_controller.status.media_metadata
-                self.songinfo = CastTrack(cast=cast, meta=meta)
+                try:
+                    self.playing["cast"].append((cast, CastTrack(cast, meta)))
+                except TypeError as err:
+                    logger.warn(f"Plex server TypeError: {err}")
+                    return 30
 
-                return self.songinfo.recheck_in()
-        else:
-            self.songinfo = None
-            return 20.0
+        if self.playing["cast"]:
+            return min(x[1].recheck_in() for x in self.playing["cast"])
+
+        return 30
+
+    def get_playing_heos(self):
+        self.playing["heos"] = []
+
+        result = self.heos.cmd("/player/get_play_state", {"pid": "223731818"})
+        if result["heos"]["result"] == "success":
+            if result["heos_message_parsed"]["state"] == "play":
+                result = self.heos.cmd("/player/get_now_playing_media", {"pid": "223731818"})
+                if result["heos"]["result"] == "success":
+                    self.playing["heos"].append(("Heos", HeosTrack(result["payload"])))
+                    return min(x[1].recheck_in() for x in self.playing["heos"])
+
+        return 20.0
 
     def new_album(self):
         if self.last_album_id == self.nowplaying().album_id:
@@ -330,12 +391,12 @@ class Music:
             width = max(width, wh[0])
             height = height + wh[1]
 
-        txtImg = Image.new('RGBA', (width + 2, height + 1), (255, 255, 255, 0))
+        txtImg = Image.new('RGBA', (width + 2, height), (255, 255, 255, 0))
         draw = ImageDraw.Draw(txtImg)
         y_pos = 0
         for line, font in lines:
-            draw.text((2, y_pos + 1), line, (0, 0, 0), font=font)
-            draw.text((1, y_pos), line, (255, 255, 255), font=font)
+            draw.text((1, y_pos + 1), line, (0, 0, 0), font=font)
+            draw.text((0, y_pos), line, (255, 255, 255), font=font)
             y_pos = y_pos + font.getsize(line)[1]
         return txtImg
 
@@ -344,7 +405,8 @@ class Music:
         lines.append((self.nowplaying().artist, self.font()))
         lines.append(('"' + self.nowplaying().track + '"', self.font()))
         if config["frame"].square:
-            lines.append((self.nowplaying().album, self.italic()))
-            if self.nowplaying().label and self.nowplaying().year:
-                lines.append(("%s (%d)" % (self.nowplaying().label, self.nowplaying().year), self.font()))
+            if self.nowplaying().year:
+                lines.append(("%s (%d)" % (self.nowplaying().album, self.nowplaying().year), self.font()))
+            else:
+                lines.append((self.nowplaying().album, self.font()))
         return lines
