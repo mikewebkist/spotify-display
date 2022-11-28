@@ -20,3 +20,6 @@ python/tokens
 python/local.config
 __pycache__
 fonts/
+python/de421.bsp
+python/hip_main.dat
+python/constellationship.fab
