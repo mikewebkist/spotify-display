@@ -18,7 +18,7 @@ from time import time
 from config import config
 from heospy import HeosPlayer
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 basepath = os.path.dirname(sys.argv[0])
@@ -108,7 +108,7 @@ class Track:
         avg = sum(ImageStat.Stat(image).sum) / sum(ImageStat.Stat(image).count)
         max = 200.0
         if avg > max:
-            logger.info(f"Image too bright for the matrix: {avg:.0f}")
+            logger.warn(f"Image too bright for the matrix: {avg:.0f}")
             image = ImageEnhance.Brightness(image).enhance(max / avg)
 
         if not config["frame"].square:
@@ -249,7 +249,7 @@ class Music:
                                         open_browser=False,
                                         scope="user-library-read,user-read-playback-state"))
         user = self._spotify.current_user()
-        logger.info("Now Playing for %s [%s]" % (user["display_name"], user["id"]))
+        logger.warn("Now Playing for %s [%s]" % (user["display_name"], user["id"]))
 
         try:
             self.heos = HeosPlayer(config_file="/home/pi/.heospy/config.json")
@@ -283,6 +283,7 @@ class Music:
                     continue
                 if not client.isPlayingMedia(includePaused=False):
                     continue
+                print(client)
                 item = self.plex.fetchItem(client.timeline.key)
                 self.playing["plex"].append((client.title, PlexTrack(item=item, client=client)))
             
@@ -290,8 +291,8 @@ class Music:
                 print(self.playing)
                 return min(x[1].recheck_in() for x in self.playing["plex"])
 
-        except TypeError as err:
-            logger.warn(f"Plex server TypeError: {err}")
+        except (plexapi.exceptions.NotFound, TypeError) as err:
+            logger.error(f"Plex server TypeError: {err}")
             return 30.0
         except requests.exceptions.ConnectionError as err:
             logger.error(f"Plex server ConnectionError: {err}")
@@ -342,14 +343,17 @@ class Music:
     def get_playing_heos(self):
         self.playing["heos"] = []
 
-        result = self.heos.cmd("/player/get_play_state", {"pid": "223731818"})
-        if result["heos"]["result"] == "success":
-            if result["heos_message_parsed"]["state"] == "play":
-                result = self.heos.cmd("/player/get_now_playing_media", {"pid": "223731818"})
-                if result["heos"]["result"] == "success":
-                    self.playing["heos"].append(("Heos", HeosTrack(result["payload"])))
-                    return min(x[1].recheck_in() for x in self.playing["heos"])
-
+        try:
+            result = self.heos.cmd("/player/get_play_state", {"pid": "223731818"})
+            if result["heos"]["result"] == "success":
+                if result["heos_message_parsed"]["state"] == "play":
+                    result = self.heos.cmd("/player/get_now_playing_media", {"pid": "223731818"})
+                    if result["heos"]["result"] == "success":
+                        self.playing["heos"].append(("Heos", HeosTrack(result["payload"])))
+                        return min(x[1].recheck_in() for x in self.playing["heos"])
+        except (TimeoutError, ConnectionResetError) as err:
+            logger.error(err)
+            
         return 20.0
 
     def new_album(self):

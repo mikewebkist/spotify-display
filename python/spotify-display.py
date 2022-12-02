@@ -36,7 +36,7 @@ except KeyError:
 
 image_cache = "%s/imagecache" % (basepath)
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
   
@@ -113,14 +113,14 @@ def clock():
 
     draw.rectangle([(0,0), (64,32)], fill=config["weather"].temp_color())
 
-    t_width = font(23).getsize(mytime)[0]
-    t_height = font(23).getsize(mytime)[1]
+    t_width = font(22).getsize(mytime)[0]
+    t_height = font(22).getsize(mytime)[1]
 
     draw.fontmode = None
     draw.text((32 - (t_width >> 1) + 2, 12 - (t_height >> 1) + 2),
-            mytime, (0,0,0), font=font(23))
+            mytime, (0,0,0), font=font(22))
     draw.text((32 - (t_width >> 1), 12 - (t_height >> 1)),
-            mytime, brighten(config["weather"].temp_color()), font=font(23))
+            mytime, brighten(config["weather"].temp_color()), font=font(22))
 
     return timeImg
 
@@ -134,13 +134,13 @@ async def main():
         # We have a playing track.
         if music.nowplaying():
             if music.new_song():
-                logger.info("now playing song: %s (%s)" % (music.nowplaying().track, type(music.nowplaying())))
+                logger.warn("now playing song: %s (%s)" % (music.nowplaying().track, type(music.nowplaying())))
                 txtImg = music.layout_text(music.track_text())
                 mtvtime = 0.0
 
             # Fade in new album covers
             if music.new_album():
-                logger.info("now playing album: %s - %s" % (music.nowplaying().artist, music.nowplaying().album))
+                logger.warn("now playing album: %s - %s" % (music.nowplaying().artist, music.nowplaying().album))
                 for x in range(127):
                     bg = music.canvas()
                     if txtImg.width < frame.width:

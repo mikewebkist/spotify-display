@@ -11,7 +11,7 @@ import logging
 from skyfield.api import load, N,S,E,W, wgs84
 from pytz import timezone
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 def hsluv2rgb(h,s,v):
@@ -77,8 +77,7 @@ class Weather:
         try:
             r = urllib.request.urlopen(self.api_url + self.api_key)
         except (http.client.RemoteDisconnected, urllib.error.URLError) as err:
-            logger.error("Problem getting weather")
-            logger.error(err)
+            logger.error("Problem getting weather :%s" % err)
             return 30
 
         self._payload = simplejson.loads(r.read())
@@ -111,7 +110,7 @@ class Weather:
             url = "http://openweathermap.org/img/wn/%s.png" % (self._now["weather"][0]["icon"])
             filename = "%s/weather-%s.png" % (self.image_cache, self._now["weather"][0]["icon"])
             if not os.path.isfile(filename):
-                logger.info("Getting %s" % url)
+                logger.warn("Getting %s" % url)
                 urllib.request.urlretrieve(url, filename)
 
             iconImage = Image.open(filename)
