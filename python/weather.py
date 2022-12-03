@@ -197,17 +197,24 @@ class Weather:
         # Supersampling at 2x
         canvas = Image.new('RGBA', (128, 64), (0, 0, 32))
         draw = ImageDraw.Draw(canvas)
+        # draw.fontmode = None
 
-        draw.line((32, 0, 32, 64), fill=(32,32,32))
+        t_width = self.font(14).getsize("W")[0]
+
+        draw.text((0, 0), "E", (128,32,32), font=self.font(14))
+        # draw.text((64, 0), "S", (128,32,32), font=self.font(14))
+        draw.text((128 - t_width, 0), "W", (128,32,32), font=self.font(14))
+
+        # draw.line((32, 0, 32, 64), fill=(32,32,32))
         draw.line((64, 0, 64, 64), fill=(32,32,32))
-        draw.line((96, 0, 96, 64), fill=(32,32,32))
+        # draw.line((96, 0, 96, 64), fill=(32,32,32))
         plot_planets = [ 
-            ("moon", (128,128,128), 6), 
             ("mercury", (96,96,96), 1), 
-            ("venus", (64,64,128), 2), 
-            ("mars", (128,32,32), 2), 
-            ("jupiter barycenter", (128,64,32), 3), 
-            ("saturn barycenter", (128,128,32), 3)
+            ("venus", (64,64,128), 1), 
+            ("mars", (128,32,32), 1), 
+            ("jupiter barycenter", (128,64,32), 2), 
+            ("saturn barycenter", (128,128,32), 2),
+            ("moon", (128,128,128), 6), 
             ]
 
         # for planet_name, color, size in plot_planets:
@@ -231,8 +238,8 @@ class Weather:
             alt, az, distance = astrometric.apparent().altaz()
 
             if alt.degrees > 0.0:
-                x = int(az.degrees * 128 / 360)
-                y = int(56 - (alt.degrees * 56 / 90))
+                x = int(az.degrees / 360.0 * 256) - 64
+                y = int(64 - (alt.degrees / 80.0 * 64))
         
                 if planet_name == "moon":
                     phase = (((round(self._payload["daily"][0]["moon_phase"] * 8) % 8) + 11))
