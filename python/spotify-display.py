@@ -134,13 +134,13 @@ async def main():
         # We have a playing track.
         if music.nowplaying():
             if music.new_song():
-                logger.warn("now playing song: %s (%s)" % (music.nowplaying().track, type(music.nowplaying())))
+                logger.warning("now playing song: %s (%s)" % (music.nowplaying().track, type(music.nowplaying())))
                 txtImg = music.layout_text(music.track_text())
                 mtvtime = 0.0
 
             # Fade in new album covers
             if music.new_album():
-                logger.warn("now playing album: %s - %s" % (music.nowplaying().artist, music.nowplaying().album))
+                logger.warning("now playing album: %s - %s" % (music.nowplaying().artist, music.nowplaying().album))
                 for x in range(127):
                     bg = music.canvas()
                     if txtImg.width < frame.width:

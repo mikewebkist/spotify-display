@@ -108,7 +108,7 @@ class Track:
         avg = sum(ImageStat.Stat(image).sum) / sum(ImageStat.Stat(image).count)
         max = 200.0
         if avg > max:
-            logger.warn(f"Image too bright for the matrix: {avg:.0f}")
+            logger.warning(f"Image too bright for the matrix: {avg:.0f}")
             image = ImageEnhance.Brightness(image).enhance(max / avg)
 
         if not config["frame"].square:
@@ -249,7 +249,7 @@ class Music:
                                         open_browser=False,
                                         scope="user-library-read,user-read-playback-state"))
         user = self._spotify.current_user()
-        logger.warn("Now Playing for %s [%s]" % (user["display_name"], user["id"]))
+        logger.warning("Now Playing for %s [%s]" % (user["display_name"], user["id"]))
 
         try:
             self.heos = HeosPlayer(config_file="/home/pi/.heospy/config.json")
@@ -283,12 +283,12 @@ class Music:
                     continue
                 if not client.isPlayingMedia(includePaused=False):
                     continue
-                print(client)
+                if client.timeline.address == "music.provider.plex.tv":
+                    continue
                 item = self.plex.fetchItem(client.timeline.key)
                 self.playing["plex"].append((client.title, PlexTrack(item=item, client=client)))
             
             if self.playing["plex"]:
-                print(self.playing)
                 return min(x[1].recheck_in() for x in self.playing["plex"])
 
         except (plexapi.exceptions.NotFound, TypeError) as err:
@@ -332,7 +332,7 @@ class Music:
                 try:
                     self.playing["cast"].append((cast, CastTrack(cast, meta)))
                 except TypeError as err:
-                    logger.warn(f"Plex server TypeError: {err}")
+                    logger.warning(f"Plex server TypeError: {err}")
                     return 30
 
         if self.playing["cast"]:
