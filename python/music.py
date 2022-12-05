@@ -285,13 +285,17 @@ class Music:
                     continue
                 if client.timeline.address == "music.provider.plex.tv":
                     continue
-                item = self.plex.fetchItem(client.timeline.key)
-                self.playing["plex"].append((client.title, PlexTrack(item=item, client=client)))
-            
+                try:   
+                    item = self.plex.fetchItem(client.timeline.key)
+                    self.playing["plex"].append((client.title, PlexTrack(item=item, client=client)))
+                except plexapi.exceptions.NotFound as err:
+                     logger.error(f"I think we have a Tidal track {err}\n{vars(client.timeline)}")
+                     continue    
+
             if self.playing["plex"]:
                 return min(x[1].recheck_in() for x in self.playing["plex"])
 
-        except (plexapi.exceptions.NotFound, TypeError) as err:
+        except (TypeError) as err:
             logger.error(f"Plex server TypeError: {err}")
             return 30.0
         except requests.exceptions.ConnectionError as err:
@@ -351,7 +355,7 @@ class Music:
                     if result["heos"]["result"] == "success":
                         self.playing["heos"].append(("Heos", HeosTrack(result["payload"])))
                         return min(x[1].recheck_in() for x in self.playing["heos"])
-        except (TimeoutError, ConnectionResetError) as err:
+        except (BrokenPipeError, TimeoutError, ConnectionResetError) as err:
             logger.error(err)
             
         return 20.0
@@ -395,7 +399,7 @@ class Music:
             width = max(width, wh[0])
             height = height + wh[1]
 
-        txtImg = Image.new('RGBA', (width + 2, height), (255, 255, 255, 0))
+        txtImg = Image.new('RGBA', (width + 2, height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(txtImg)
         y_pos = 0
         for line, font in lines:
