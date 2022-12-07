@@ -9,7 +9,6 @@ from config import config
 import logging
 from skyfield.api import load, N,W, wgs84
 
-logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 def hsluv2rgb(h,s,v):

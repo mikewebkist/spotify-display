@@ -18,7 +18,6 @@ from time import time
 from config import config
 from heospy import HeosPlayer
 
-logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 basepath = os.path.dirname(sys.argv[0])
@@ -235,11 +234,13 @@ class Music:
     def __init__(self, devices=None, image_cache=""):
         self.plex = PlexServer(config["config"]["plex"]["base"], config["config"]["plex"]["token"])
         self.plex_devices = config["config"]["plex"]["devices"].split(", ")
+        logger.warning("Plex: %s" % ", ".join(self.plex_devices))
 
         self.chromecasts = None
         try:
             devices=config["config"]["chromecast"]["devices"].split(", ")
             self.chromecasts, self.browser = pychromecast.get_listed_chromecasts(friendly_names=devices)
+            logger.warning("Chromecast: %s" % ", ".join(map(lambda x: x.name, self.chromecasts)))
         except KeyError:
             pass
         
@@ -253,10 +254,12 @@ class Music:
                                         open_browser=False,
                                         scope="user-library-read,user-read-playback-state"))
         user = self._spotify.current_user()
-        logger.warning("Now Playing for %s [%s]" % (user["display_name"], user["id"]))
+        logger.warning("Spotify: %s [%s]" % (user["display_name"], user["id"]))
 
         try:
             self.heos = HeosPlayer(config_file="/home/pi/.heospy/config.json")
+            logger.warning("HEOS: %s" % self.heos.main_player_name)
+
         except:
             logging.error("HEOS problem...")
 
