@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 from hsluv import hsluv_to_rgb, hpluv_to_rgb
-import math
 import asyncio
 import configparser
 from datetime import datetime
@@ -56,11 +55,11 @@ class Frame:
         self.options.hardware_mapping = "adafruit-hat-pwm"
         self.options.rows = int(config["config"]["matrix"]["height"])
         self.options.cols = int(config["config"]["matrix"]["width"])
-        self.gamma = float(config["config"]["matrix"]["gamma"])
-
+        self.gamma = lambda value : round(pow(value / 255.0, float(config["config"]["matrix"]["gamma"])) * 255.0)
+        
         self.matrix = RGBMatrix(options=self.options)
         self.offscreen_canvas = self.matrix.CreateFrameCanvas()
-        self.width = self.options.cols
+        self.width = self.options.cols - int(config["config"]["matrix"]["padding_left"])
         self.height = self.options.rows - int(config["config"]["matrix"]["padding_top"])
     
     @property
@@ -70,11 +69,8 @@ class Frame:
     def swap(self, canvas):
         padding_left = int(config["config"]["matrix"]["padding_left"])
         padding_top = int(config["config"]["matrix"]["padding_top"])
-        
-        def gamma(value):
-            return round(pow(value / 255.0, self.gamma) * 255.0)
 
-        canvas = Image.eval(canvas, gamma)
+        canvas = Image.eval(canvas, self.gamma)
 
         if config["weather"].night:
             canvas = ImageEnhance.Brightness(canvas).enhance(0.5)
@@ -111,7 +107,7 @@ def clock():
     timeImg = Image.new('RGBA', (64, 30), (0,0,0,0))
     draw = ImageDraw.Draw(timeImg)
 
-    draw.rectangle([(0,0), (64,32)], fill=config["weather"].temp_color())
+    draw.rectangle([(0,0), (64,30)], fill=config["weather"].temp_color())
 
     t_width = font(22).getsize(mytime)[0]
     t_height = font(22).getsize(mytime)[1]

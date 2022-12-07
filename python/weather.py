@@ -1,15 +1,13 @@
 import http
 import urllib
 import simplejson
-from datetime import datetime
 import time
-from PIL import Image, ImageEnhance, ImageDraw, ImageOps, ImageFont
-from hsluv import hsluv_to_rgb, hpluv_to_rgb
+from PIL import Image, ImageEnhance, ImageDraw, ImageFont
+from hsluv import hsluv_to_rgb
 import os
 from config import config
 import logging
-from skyfield.api import load, N,S,E,W, wgs84
-from pytz import timezone
+from skyfield.api import load, N,W, wgs84
 
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -187,7 +185,6 @@ class Weather:
 
     def planets(self):
         ts = load.timescale()
-        utc = timezone('US/Eastern')
 
         # Load the JPL ephemeris DE421 (covers 1900-2050).
         planets = load('de421.bsp')

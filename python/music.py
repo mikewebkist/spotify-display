@@ -96,10 +96,14 @@ class Track:
         except OSError:
             pass
 
-        with urllib.request.urlopen(url) as rawimage:
-            image = ImageOps.pad(Image.open(rawimage), size=(64,64), method=Image.LANCZOS, centering=(1,0))
-            image.save(processed, "PNG")
-            return image
+        try:
+            with urllib.request.urlopen(url) as rawimage:
+                image = ImageOps.pad(Image.open(rawimage), size=(64,64), method=Image.LANCZOS, centering=(1,0))
+                image.save(processed, "PNG")
+                return image
+        except urllib.error.URLError as err:
+            logging.error("Can't get image...")
+            return Image.new('RGBA', (64, 64), (0,0,0))
 
     @property
     def image(self):
