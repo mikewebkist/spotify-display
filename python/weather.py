@@ -8,6 +8,8 @@ import os
 from config import config
 import logging
 from skyfield.api import load, N,W, wgs84
+from pytz import timezone
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -184,6 +186,7 @@ class Weather:
 
     def planets(self):
         ts = load.timescale()
+        utc = timezone('US/Eastern')
 
         # Load the JPL ephemeris DE421 (covers 1900-2050).
         planets = load('de421.bsp')
@@ -205,28 +208,13 @@ class Weather:
         draw.line((64, 0, 64, 64), fill=(32,32,32))
         # draw.line((96, 0, 96, 64), fill=(32,32,32))
         plot_planets = [ 
-            ("mercury", (96,96,96), 1), 
-            ("venus", (64,64,128), 1), 
+            # ("mercury", (96,96,96), 1), 
+            ("venus", (32,32,128), 1), 
             ("mars", (128,32,32), 1), 
             ("jupiter barycenter", (128,64,32), 2), 
-            ("saturn barycenter", (128,128,32), 2),
+            ("saturn barycenter", (32,128,32), 2),
             ("moon", (128,128,128), 6), 
             ]
-
-        # for planet_name, color, size in plot_planets:
-            # this is going to be all sorts of messed up after midnight
-            # lines = []
-            # for t_local in range(self._payload["daily"][0]["sunset"], self._payload["daily"][1]["sunrise"], 60 * 60):
-            #     dt_local = utc.localize(datetime.fromtimestamp(t_local))
-            #     t = ts.from_datetime(dt_local)
-
-            #     astrometric = philly.at(t).observe(planets[planet_name])
-            #     alt, az, distance = astrometric.apparent().altaz()
-            #     if alt.degrees > 0.0:
-            #         x = int(az.degrees * 128 / 360)
-            #         y = int(56 - (alt.degrees * 56 / 90))
-            #         lines.append((x, y))
-            # draw.line(lines, fill=(32,32,32))
 
         for planet_name, color, size in plot_planets:
             t = ts.now()
@@ -243,6 +231,7 @@ class Weather:
                     moonDim = ImageEnhance.Brightness(moonImage).enhance(0.75)
                     canvas.alpha_composite(moonDim, dest=(x-6, y-6))
                 else:
+                    draw.line((x - 2 * size, y, x + 2 * size, y), fill=color, width=1)
                     draw.ellipse((x-size, y-size, x+size, y+size), fill=color)
 
         return canvas.resize((64, 32), resample=Image.ANTIALIAS)

@@ -146,8 +146,6 @@ async def main():
 
                 await asyncio.sleep(0)
 
-            # Only show credits at start and end of playback.
-            # if music.nowplaying().timein < 30 or not mtvtime or (music.nowplaying().timeleft < (math.floor(30.0 / mtvtime) * mtvtime) and music.nowplaying().timeleft > mtvtime):
             # If either line of text is longer than the display, scroll
             if txtImg.width >= frame.width:
                 t0 = time.time()
