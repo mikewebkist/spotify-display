@@ -175,10 +175,10 @@ class Weather:
             except (KeyError, IndexError):
                 pass
 
-        txtImg = layout_text([ (self.temp(),       hsluv2rgb(69.0, 75.0, 75.0),  self.font(12)),
-                                (self.humidity(),   hsluv2rgb(139.9, 75.0, 50.0), self.font(8)),
-                                (self.wind_speed(), hsluv2rgb(183.8, 75.0, 50.0), self.font(8)),
-                                (self.pressure(),   hsluv2rgb(128.0, 0.0, 50.0),  self.font(8)) ])
+        txtImg = layout_text([(self.temp(),       hsluv2rgb(69.0, 75.0, 75.0),  self.font(12)),
+                              (self.humidity(),   hsluv2rgb(139.9, 75.0, 50.0), self.font(8)),
+                              (self.wind_speed(), hsluv2rgb(183.8, 75.0, 50.0), self.font(8)),
+                              (self.pressure(),   hsluv2rgb(128.0, 0.0, 50.0),  self.font(8)) ])
 
         canvas.alpha_composite(txtImg, dest=(0, 1))
 
@@ -211,8 +211,8 @@ class Weather:
             # ("mercury", (96,96,96), 1), 
             ("venus", (32,32,128), 1), 
             ("mars", (128,32,32), 1), 
-            ("jupiter barycenter", (128,64,32), 2), 
-            ("saturn barycenter", (32,128,32), 2),
+            ("jupiter barycenter", (128,64,32), 3), 
+            ("saturn barycenter", (32,128,32), 3),
             ("moon", (128,128,128), 6), 
             ]
 
@@ -231,6 +231,9 @@ class Weather:
                     moonDim = ImageEnhance.Brightness(moonImage).enhance(0.75)
                     canvas.alpha_composite(moonDim, dest=(x-6, y-6))
                 else:
+                    if planet_name == "saturn barycenter":
+                        draw.ellipse((x-3*size, y-1, x+3*size, y+1), fill=(128,128,128))
+
                     draw.line((x - 2 * size, y, x + 2 * size, y), fill=color, width=1)
                     draw.ellipse((x-size, y-size, x+size, y+size), fill=color)
 
