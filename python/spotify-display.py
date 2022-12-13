@@ -85,17 +85,20 @@ def brighten(rgb):
     r, g, b = hsv_to_rgb(h, s, v)
     return (int(r * 255), int(g * 255), int(b * 255))
 
+def getsize(bbox):
+    return (bbox[2] - bbox[0], bbox[3] - bbox[1])
+
 def small_clock():
     timeImg = Image.new('RGBA', (32, 32), (0,0,0,0))
     draw = ImageDraw.Draw(timeImg)
     color = brighten(config["weather"].temp_color())
     draw.fontmode = None
     
-    t_width, t_height = font(18).getsize(datetime.now().strftime("%I"))
+    t_width, t_height = getsize(font(18).getbbox(datetime.now().strftime("%I")))
     draw.text((17 - (t_width >> 1), 5 - (t_height >> 1) + 1), datetime.now().strftime("%I"), (0,0,0), font=font(18))
     draw.text((16 - (t_width >> 1), 4 - (t_height >> 1) + 1), datetime.now().strftime("%I"), color, font=font(18))
 
-    t_width, t_height = font(18).getsize(datetime.now().strftime("%M"))
+    t_width, t_height = getsize(font(18).getbbox(datetime.now().strftime("%M")))
     draw.text((17 - (t_width >> 1), 20 - (t_height >> 1) + 1), datetime.now().strftime("%M"), (0,0,0), font=font(18))
     draw.text((16 - (t_width >> 1), 19 - (t_height >> 1) + 1), datetime.now().strftime("%M"), color, font=font(18))
 
@@ -109,8 +112,8 @@ def clock():
 
     draw.rectangle([(0,0), (64,30)], fill=config["weather"].temp_color())
 
-    t_width = font(22).getsize(mytime)[0]
-    t_height = font(22).getsize(mytime)[1]
+    t_width = getsize(font(22).getbbox(mytime))[0]
+    t_height = getsize(font(22).getbbox(mytime))[1]
 
     draw.fontmode = None
     draw.text((32 - (t_width >> 1) + 2, 12 - (t_height >> 1) + 2),
