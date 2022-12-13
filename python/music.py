@@ -109,7 +109,7 @@ class Track:
         image = self.get_image()
 
         avg = sum(ImageStat.Stat(image).sum) / sum(ImageStat.Stat(image).count)
-        max = 200.0
+        max = 250.0
         if avg > max:
             logger.warning(f"Image too bright for the matrix: {avg:.0f}")
             image = ImageEnhance.Brightness(image).enhance(max / avg)
@@ -306,7 +306,7 @@ class Music:
             logger.error(f"Plex server TypeError: {err}")
             return 30.0
         except requests.exceptions.ConnectionError as err:
-            logger.error(f"Plex server ConnectionError: {err}")
+            logger.info(f"Plex server ConnectionError: {err}")
             return 30.0
         except (AttributeError, requests.exceptions.ReadTimeout) as err:
             logger.error(f"Plex server error: {err}")
