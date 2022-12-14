@@ -135,13 +135,14 @@ async def main():
             if music.new_song():
                 logger.warning("now playing song: %s (%s)" % (music.nowplaying().track, type(music.nowplaying())))
                 txtImg = music.layout_text(music.track_text())
-                mtvtime = 0.0
+
+            canvas = music.canvas()
 
             # Fade in new album covers
             if music.new_album():
                 logger.warning("now playing album: %s - %s" % (music.nowplaying().artist, music.nowplaying().album))
                 for x in range(127):
-                    bg = music.canvas()
+                    bg = canvas.copy()
                     if txtImg.width < frame.width:
                         bg.alpha_composite(txtImg, dest=(0, frame.height - 2 - txtImg.height))
                     frame.swap(ImageEnhance.Brightness(bg).enhance(x * 2 / 255.0).convert('RGB'))
@@ -153,15 +154,14 @@ async def main():
             if txtImg.width >= frame.width:
                 t0 = time.time()
                 for x in range(txtImg.width + 10 + frame.width):
-                    bg = music.canvas()
+                    bg = canvas.copy()
                     bg.alpha_composite(txtImg, dest=(frame.width - x, frame.height - txtImg.height))
                     frame.swap(bg.convert('RGB'))
                     time.sleep(0.0125) # Don't release thread until scroll is done
                 t1 = time.time()
-                mtvtime = max(mtvtime, t1 - t0)
                 await asyncio.sleep(1.0)
             else:
-                bg = music.canvas()
+                bg = canvas.copy()
                 bg.alpha_composite(txtImg, dest=(0, frame.height - txtImg.height))
                 frame.swap(bg.convert('RGB'))
 
