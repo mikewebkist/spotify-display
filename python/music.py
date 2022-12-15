@@ -398,30 +398,19 @@ class Music:
 
         return canvas
 
-    def layout_text(self, lines):
-        height = 0
-        width = 0
-        for line, font in lines:
-            wh = font.getsize(line)
-            width = max(width, wh[0])
-            height = height + wh[1]
-
-        txtImg = Image.new('RGBA', (width + 2, height), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(txtImg)
-        y_pos = 0
-        for line, font in lines:
-            draw.text((1, y_pos + 1), line, (0, 0, 0), font=font)
-            draw.text((0, y_pos), line, (255, 255, 255), font=font)
-            y_pos = y_pos + font.getsize(line)[1]
-        return txtImg
-
-    def track_text(self):
-        lines = []
-        lines.append((self.nowplaying().artist, self.font()))
-        lines.append(('"' + self.nowplaying().track + '"', self.font()))
+    def layout_text(self):
+        text = self.nowplaying().artist + "\n"
+        text += f'"{self.nowplaying().track}"' + "\n"
         if config["frame"].square:
             if self.nowplaying().year:
-                lines.append(("%s (%d)" % (self.nowplaying().album, self.nowplaying().year), self.font()))
+                text += f'{self.nowplaying().album} ({self.nowplaying().year})'
             else:
-                lines.append((self.nowplaying().album, self.font()))
-        return lines
+                text += self.nowplaying().album
+
+        (l, t, r, b) = ImageDraw.Draw(Image.new('RGBA', (1, 1))).multiline_textbbox((0, -1), text, font=self.font(), spacing=0)
+
+        image = Image.new('RGBA', (r, b + 1), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(image)
+        draw.multiline_text((1, 1), text, fill=(0,0,0), font=self.font(), spacing=0)
+        draw.multiline_text((0, 0), text, fill=(255, 255, 255), font=self.font(), spacing=0)
+        return image

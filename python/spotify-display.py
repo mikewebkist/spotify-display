@@ -116,9 +116,9 @@ def clock():
     t_height = getsize(font(22).getbbox(mytime))[1]
 
     draw.fontmode = None
-    draw.text((32 - (t_width >> 1) + 2, 12 - (t_height >> 1) + 2),
+    draw.text((32 - (t_width >> 1) + 2, 10 - (t_height >> 1) + 2),
             mytime, (0,0,0), font=font(22))
-    draw.text((32 - (t_width >> 1), 12 - (t_height >> 1)),
+    draw.text((32 - (t_width >> 1), 10 - (t_height >> 1)),
             mytime, brighten(config["weather"].temp_color()), font=font(22))
 
     return timeImg
@@ -128,15 +128,15 @@ async def main():
     music = config["music"]
     frame = config["frame"]
     txtImg = None
-    
+    canvas = None
+
     while True:
         # We have a playing track.
         if music.nowplaying():
             if music.new_song():
                 logger.warning("now playing song: %s (%s)" % (music.nowplaying().track, type(music.nowplaying())))
-                txtImg = music.layout_text(music.track_text())
-
-            canvas = music.canvas()
+                txtImg = music.layout_text()
+                canvas = music.canvas()
 
             # Fade in new album covers
             if music.new_album():
@@ -144,9 +144,9 @@ async def main():
                 for x in range(127):
                     bg = canvas.copy()
                     if txtImg.width < frame.width:
-                        bg.alpha_composite(txtImg, dest=(0, frame.height - 2 - txtImg.height))
+                        bg.alpha_composite(txtImg, dest=(0, frame.height - txtImg.height))
                     frame.swap(ImageEnhance.Brightness(bg).enhance(x * 2 / 255.0).convert('RGB'))
-                    time.sleep(0.0125) # Don't release thread until scroll is done
+                    time.sleep(0.01) # Don't release thread until scroll is done
 
                 await asyncio.sleep(0)
 
@@ -157,7 +157,7 @@ async def main():
                     bg = canvas.copy()
                     bg.alpha_composite(txtImg, dest=(frame.width - x, frame.height - txtImg.height))
                     frame.swap(bg.convert('RGB'))
-                    time.sleep(0.0125) # Don't release thread until scroll is done
+                    time.sleep(0.01) # Don't release thread until scroll is done
                 t1 = time.time()
                 await asyncio.sleep(1.0)
             else:
