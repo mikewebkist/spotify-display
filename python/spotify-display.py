@@ -133,10 +133,10 @@ async def main():
     while True:
         # We have a playing track.
         if music.nowplaying():
+            canvas = music.canvas()
             if music.new_song():
                 logger.warning("now playing song: %s (%s)" % (music.nowplaying().track, type(music.nowplaying())))
                 txtImg = music.layout_text()
-                canvas = music.canvas()
 
             # Fade in new album covers
             if music.new_album():

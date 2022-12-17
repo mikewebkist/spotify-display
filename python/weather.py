@@ -4,6 +4,7 @@ import simplejson
 import time
 from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 from hsluv import hsluv_to_rgb
+from colorsys import rgb_to_hsv, hsv_to_rgb
 import os
 from config import config
 import logging
@@ -18,24 +19,6 @@ def hsluv2rgb(h,s,v):
 
 def ktof(k):
     return (k - 273.15) * 1.8 + 32.0
-
-def layout_text(lines):
-    height = 0
-    width = 0
-    for text, color, font in lines:
-        wh = font.getsize(text)
-        width = max(width, wh[0])
-        height = height + wh[1]
-
-    txtImg = Image.new('RGBA', (width + 1, height + 1), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(txtImg)
-    draw.fontmode = "1"
-    y_pos = 0
-    for text, color, font in lines:
-        draw.text((2, y_pos + 1), text, (0,0,0), font=font)
-        draw.text((1, y_pos),     text, color,   font=font)
-        y_pos = y_pos + font.getsize(text)[1]
-    return txtImg
 
 def temp_color(temp):
     temp = ktof(temp)
@@ -94,7 +77,10 @@ class Weather:
         return time.time() > self._now["sunset"] or time.time() < self._now["sunrise"]
 
     def temp_color(self):
-        return temp_color(self._payload["current"]["temp"])
+        if self.steamy() or self.icy():
+            return temp_color(ktof(self._payload["current"]["feels_like"]))
+        else:
+            return temp_color(ktof(self._payload["current"]["temp"]))
         
     def icon(self):
         iconBox = Image.new('RGBA', (32, 32), (0, 0, 0))
@@ -126,10 +112,10 @@ class Weather:
 
     # If the "feels_like" temp is over 80 it's probably steamy outside
     def steamy(self):
-        return ktof(self._payload["current"]["feels_like"]) > 90
+        return ktof(self._payload["current"]["feels_like"]) > 85
 
     def icy(self):
-        return ktof(self._payload["current"]["feels_like"]) < 32
+        return ktof(self._payload["current"]["feels_like"]) < 33
 
     def feelslike(self):
         if self.steamy() or self.icy():
@@ -175,13 +161,15 @@ class Weather:
             except (KeyError, IndexError):
                 pass
 
-        txtImg = layout_text([(self.temp(),       hsluv2rgb(69.0, 75.0, 75.0),  self.font(12)),
-                              (self.humidity(),   hsluv2rgb(139.9, 75.0, 50.0), self.font(8)),
-                              (self.wind_speed(), hsluv2rgb(183.8, 75.0, 50.0), self.font(8)),
-                              (self.pressure(),   hsluv2rgb(128.0, 0.0, 50.0),  self.font(8)) ])
+        draw.fontmode = "1"
 
-        canvas.alpha_composite(txtImg, dest=(0, 1))
+        h, s, v = rgb_to_hsv(*map(lambda x: x / 255.0, self.temp_color()))
+        fg_color = tuple(map(lambda x: int(x*255.0), hsv_to_rgb(h, s, (v + 0.25) % 1.0)))
+        bg_color = tuple(map(lambda x: int(x*255.0), hsv_to_rgb(h, s, (v - 0.25) % 1.0)))
 
+        draw.text((0,1), self.temp(), fill=fg_color, font=self.font(13), stroke_width=2, stroke_fill=bg_color)
+        text = self.humidity() + "\n" + self.wind_speed() + "\n" + self.pressure()
+        draw.multiline_text((1, 13), text, fill=(128, 128, 128), font=self.font(8), spacing=0)
         return canvas
 
     def planets(self):
@@ -242,6 +230,5 @@ class Weather:
             txtImg.alpha_composite(icon, dest=(14,0))
         draw = ImageDraw.Draw(txtImg)
         draw.fontmode = "1"
-        # draw.text((3, 1), self.feelslike(), (0, 0, 0), font=self.font(10))
         draw.text((2, 0), self.feelslike(), self.temp_color(), font=self.font(9))
         return txtImg
