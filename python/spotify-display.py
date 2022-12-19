@@ -13,6 +13,7 @@ from rgbmatrix import RGBMatrix, RGBMatrixOptions
 from PIL import Image, ImageEnhance, ImageFont, ImageDraw
 import weather as weatherimport
 import music as musicimport
+from music import TrackError
 from config import config
 from colorsys import rgb_to_hsv, hsv_to_rgb
 
@@ -133,13 +134,22 @@ async def main():
     while True:
         # We have a playing track.
         if music.nowplaying():
-            canvas = music.canvas()
+            
             if music.new_song():
                 logger.warning("now playing song: %s (%s)" % (music.nowplaying().track, type(music.nowplaying())))
                 txtImg = music.layout_text()
 
             # Fade in new album covers
             if music.new_album():
+                try:
+                    canvas = music.canvas()
+                except TrackError as err:
+                    logger.warning(err)
+                    canvas = Image.new('RGBA', (64, 64), (0, 0, 0))
+                    canvas.paste(weather.weather_summary(), (0, 0))
+                    canvas.paste(weather.icon(), (32, 0))
+                    
+                    
                 logger.warning("now playing album: %s - %s" % (music.nowplaying().artist, music.nowplaying().album))
                 for x in range(127):
                     bg = canvas.copy()
@@ -152,13 +162,11 @@ async def main():
 
             # If either line of text is longer than the display, scroll
             if txtImg.width >= frame.width:
-                t0 = time.time()
                 for x in range(txtImg.width + 10 + frame.width):
                     bg = canvas.copy()
                     bg.alpha_composite(txtImg, dest=(frame.width - x, frame.height - txtImg.height))
                     frame.swap(bg.convert('RGB'))
                     time.sleep(0.01) # Don't release thread until scroll is done
-                t1 = time.time()
                 await asyncio.sleep(1.0)
             else:
                 bg = canvas.copy()
