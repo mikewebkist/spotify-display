@@ -268,6 +268,30 @@ class Music:
         self.albumArtCached = None
         self.playing = {}
     
+    @property
+    def album_id(self):
+        return self.nowplaying().album_id
+
+    @property
+    def track_id(self):
+        return self.nowplaying().track_id
+
+    @property
+    def album(self):
+        return self.nowplaying().album
+
+    @property
+    def artist(self):
+        return self.nowplaying().artist
+
+    @property
+    def track(self):
+        return self.nowplaying().track
+
+    @property
+    def image(self):
+        return self.nowplaying().image
+
     def font(self, size=8):
         return ImageFont.truetype(config["config"]["fonts"]["music"], size)
 
@@ -331,7 +355,7 @@ class Music:
             self.playing["spotify"].append(("Spotify", SpotifyTrack(meta)))
             return min(x[1].recheck_in() for x in self.playing["spotify"])
         else:
-            return 60.0
+            return 120.0
             
     def get_playing_chromecast(self):
         self.playing["cast"] = []
@@ -344,12 +368,12 @@ class Music:
                     self.playing["cast"].append((cast, CastTrack(cast, meta)))
                 except TypeError as err:
                     logger.warning(f"Plex server TypeError: {err}")
-                    return 30
+                    return 30.0
 
         if self.playing["cast"]:
             return min(x[1].recheck_in() for x in self.playing["cast"])
 
-        return 30
+        return 30.0
 
     def get_playing_heos(self):
         self.playing["heos"] = []
@@ -365,27 +389,27 @@ class Music:
         except (BrokenPipeError, TimeoutError, ConnectionResetError) as err:
             logger.error(err)
             
-        return 20.0
+        return 120.0
 
     def new_album(self):
-        if self.last_album_id == self.nowplaying().album_id:
+        if self.last_album_id == self.album_id:
             return False
         else:
             self.albumArtCached = None
-            self.last_album_id = self.nowplaying().album_id
+            self.last_album_id = self.album_id
 
             return True
 
     def new_song(self):
-        if self.last_track_id == self.nowplaying().track_id:
+        if self.last_track_id == self.track_id:
             return False
         else:
-            self.last_track_id = self.nowplaying().track_id
+            self.last_track_id = self.track_id
             return True
 
     def album_image(self):
         if not self.albumArtCached:
-            self.albumArtCached = self.nowplaying().image
+            self.albumArtCached = self.image
 
         return self.albumArtCached
 
@@ -399,13 +423,13 @@ class Music:
         return canvas
 
     def layout_text(self):
-        text = self.nowplaying().artist + "\n"
-        text += f'"{self.nowplaying().track}"' + "\n"
+        text = self.artist + "\n"
+        text += f'"{self.track}"' + "\n"
         if config["frame"].square:
-            if self.nowplaying().year:
-                text += f'{self.nowplaying().album} ({self.nowplaying().year})'
+            if self.year:
+                text += f'{self.album} ({self.year})'
             else:
-                text += self.nowplaying().album
+                text += self.album
 
         (l, t, r, b) = ImageDraw.Draw(Image.new('RGBA', (1, 1))).multiline_textbbox((0, -1), text, font=self.font(), spacing=0)
 

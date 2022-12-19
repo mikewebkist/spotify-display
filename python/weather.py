@@ -135,6 +135,15 @@ class Weather:
     def weather_summary(self):
         canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
         draw = ImageDraw.Draw(canvas)
+        draw.fontmode = "1"
+
+        h, s, v = rgb_to_hsv(*map(lambda x: x / 255.0, self.temp_color()))
+        fg_color = tuple(map(lambda x: int(x*255.0), hsv_to_rgb(h, s, (v + 0.25) % 1.0)))
+        bg_color = tuple(map(lambda x: int(x*255.0), hsv_to_rgb(h, s, (v - 0.25) % 1.0)))
+
+        draw.text((0,1), self.temp(), fill=fg_color, font=self.font(13), stroke_width=2, stroke_fill=bg_color)
+        text = self.humidity() + "\n" + self.wind_speed() + "\n" + self.pressure()
+        draw.multiline_text((1, 13), text, fill=(128, 128, 128), font=self.font(8), spacing=0)
         
         for x in range(24):
             t = time.localtime(self.hour(x+1)["dt"])
@@ -161,15 +170,6 @@ class Weather:
             except (KeyError, IndexError):
                 pass
 
-        draw.fontmode = "1"
-
-        h, s, v = rgb_to_hsv(*map(lambda x: x / 255.0, self.temp_color()))
-        fg_color = tuple(map(lambda x: int(x*255.0), hsv_to_rgb(h, s, (v + 0.25) % 1.0)))
-        bg_color = tuple(map(lambda x: int(x*255.0), hsv_to_rgb(h, s, (v - 0.25) % 1.0)))
-
-        draw.text((0,1), self.temp(), fill=fg_color, font=self.font(13), stroke_width=2, stroke_fill=bg_color)
-        text = self.humidity() + "\n" + self.wind_speed() + "\n" + self.pressure()
-        draw.multiline_text((1, 13), text, fill=(128, 128, 128), font=self.font(8), spacing=0)
         return canvas
 
     def planets(self):
