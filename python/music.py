@@ -26,6 +26,9 @@ if basepath == "":
 
 image_cache = "%s/imagecache" % (basepath)
 
+class TrackError(Exception):
+    pass
+
 class Track:
     def __init__(self):
         self.art_url = None
@@ -77,11 +80,7 @@ class Track:
 
     def get_image(self):
         if not self.art_url:
-            url = random.choice([
-                "https://japan-is-an-island.webkist.com/tumblr_files/tumblr_obmagdfqtB1vcet60o1_1280.jpg",
-                "https://japan-is-an-island.webkist.com/tumblr_files/tumblr_objebnzagl1vcet60o1_1280.jpg",
-                "https://www.webkist.com/assets/photography/flickr/small/five-ties_443920236_o.jpg",
-                "https://www.webkist.com/assets/photography/flickr/small/trees--snow_436704156_o.jpg"])
+            raise TrackError(f"No art_url set {self.track} {self}")
         else:
             url = self.art_url
 
@@ -101,8 +100,7 @@ class Track:
                 image.save(processed, "PNG")
                 return image
         except urllib.error.URLError as err:
-            logging.error("Can't get image...")
-            return Image.new('RGBA', (64, 64), (0,0,0))
+            raise TrackError(f"Can't get image: {err} {self.track} {self}")
 
     @property
     def image(self):
@@ -161,7 +159,7 @@ class PlexTrack(Track):
         try:
             image = Image.open(path)
         except PIL.UnidentifiedImageError as err:
-            return super().get_image()
+            raise TrackError(f"Can't get image: {err} {self.track} {self}")
 
         image = ImageOps.pad(image, size=(64,64), centering=(1,0))
         if image.mode != "RGB":
@@ -295,7 +293,7 @@ class Music:
                 try:   
                     item = self.plex.fetchItem(client.timeline.key)
                     self.playing["plex"].append((client.title, PlexTrack(item=item, client=client)))
-                except plexapi.exceptions.NotFound as err:
+                except (plexapi.exceptions.NotFound, plexapi.exceptions.BadRequest) as err:
                      logger.error(f"I think we have a Tidal track {err}\n{vars(client.timeline)}")
                      continue    
 
