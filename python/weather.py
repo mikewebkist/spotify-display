@@ -51,6 +51,7 @@ class Weather:
     def __init__(self, api_key=None, image_cache=""):
         self.api_key = api_key
         self.image_cache = image_cache
+        self.p_canvas = None
     
     def font(self, size):
         return ImageFont.truetype(config["config"]["fonts"]["weather"], size)
@@ -64,6 +65,7 @@ class Weather:
 
         self._payload = simplejson.loads(r.read())
         self._now = self._payload["current"]
+        self.p_canvas = self.planets()
         
         if self.hour(0)["pop"] > 0.0:
             return 60 * 5
@@ -184,17 +186,17 @@ class Weather:
         # Supersampling at 2x
         canvas = Image.new('RGBA', (256, 64), (0, 0, 32))
         draw = ImageDraw.Draw(canvas)
-        draw.fontmode = None
+        # draw.fontmode = None
 
-        draw.text((2+0,   0), "N", (64,64,64), font=self.font(14))
-        draw.text((2+64,  0), "E", (64,64,64), font=self.font(14))
-        draw.text((2+128, 0), "S", (64,64,64), font=self.font(14))
-        draw.text((2+192, 0), "W", (64,64,64), font=self.font(14))
+        draw.text((2+0,   0), "N", (255,255,255), font=self.font(14))
+        draw.text((2+64,  0), "E", (255,255,255), font=self.font(14))
+        draw.text((2+128, 0), "S", (255,255,255), font=self.font(14))
+        draw.text((2+192, 0), "W", (255,255,255), font=self.font(14))
 
-        draw.line((0,   0, 0,   64), fill=(32,32,32))
-        draw.line((64,  0, 64,  64), fill=(32,32,32))
-        draw.line((128, 0, 128, 64), fill=(32,32,32))
-        draw.line((192, 0, 192, 64), fill=(32,32,32))
+        draw.line((0,   0, 0,   64), fill=(255,255,255))
+        draw.line((64,  0, 64,  64), fill=(255,255,255))
+        draw.line((128, 0, 128, 64), fill=(255,255,255))
+        draw.line((192, 0, 192, 64), fill=(255,255,255))
 
         plot_planets = [ 
             ("venus", (32,32,128), 1), 
@@ -224,7 +226,12 @@ class Weather:
                     draw.line((x - 2 * size, y, x + 2 * size, y), fill=color, width=1)
                     draw.ellipse((x-size, y-size, x+size, y+size), fill=color)
 
-        return canvas.resize((128, 32), resample=Image.ANTIALIAS)
+        # return canvas.resize((128, 32), resample=Image.ANTIALIAS)
+        p_canvas = Image.new('RGBA', (512, 64), (0, 0, 0))
+        p_canvas.alpha_composite(canvas, dest=(0,0))
+        p_canvas.alpha_composite(canvas, dest=(256,0))
+
+        return p_canvas
 
     def extreme(self):
         txtImg = Image.new('RGBA', (32, 32), (0, 0, 0, 0))

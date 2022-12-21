@@ -130,7 +130,7 @@ async def main():
     frame = config["frame"]
     txtImg = None
     canvas = None
-
+    t=0
     while True:
         # We have a playing track.
         if music.nowplaying():
@@ -184,10 +184,10 @@ async def main():
             # On large screens, show a small clock and the planet paths or a big clock
             if config["frame"].square:
                 if weather.night:
-                    t = int((time.time() % 300) * 128 / 300)
-                    p = weather.planets()
-                    weather_canvas.alpha_composite(p, dest=(t,32))
-                    weather_canvas.alpha_composite(p, dest=(t - 128,32))
+                    # t = int((time.time() % 300) * 128 / 300)
+                    t = t + 1
+                    p_canvas = weather.p_canvas.crop((t, 0, t + 128, 64)).resize((64, 32), resample=Image.Resampling.BILINEAR)
+                    weather_canvas.alpha_composite(p_canvas, dest=(0,32))
                     
                     weather_canvas.alpha_composite(small_clock(), dest=(32, 0))
                 else:
@@ -195,6 +195,9 @@ async def main():
             # On small screens, show a small clock over the weather icon
             else:
                 weather_canvas.alpha_composite(small_clock(), dest=(32,0))
+                # t = t + 1
+                # p_canvas = weather.p_canvas.crop((t, 0, t + 128, 64)).resize((64, 32), resample=Image.Resampling.BILINEAR)
+                # weather_canvas.alpha_composite(p_canvas, dest=(0,0))
             
             frame.swap(weather_canvas.convert('RGB'))
 
