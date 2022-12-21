@@ -182,16 +182,20 @@ class Weather:
         philly = earth + wgs84.latlon(39.9623348 * N, 75.1927043 * W, elevation_m=10.59)
 
         # Supersampling at 2x
-        canvas = Image.new('RGBA', (128, 64), (0, 0, 32))
+        canvas = Image.new('RGBA', (256, 64), (0, 0, 32))
         draw = ImageDraw.Draw(canvas)
         draw.fontmode = None
 
-        t_width = self.font(14).getsize("W")[0]
+        draw.text((2+0,   0), "N", (64,64,64), font=self.font(14))
+        draw.text((2+64,  0), "E", (64,64,64), font=self.font(14))
+        draw.text((2+128, 0), "S", (64,64,64), font=self.font(14))
+        draw.text((2+192, 0), "W", (64,64,64), font=self.font(14))
 
-        draw.text((0, 0), "E", (128,32,32), font=self.font(14))
-        draw.text((128 - t_width, 0), "W", (128,32,32), font=self.font(14))
+        draw.line((0,   0, 0,   64), fill=(32,32,32))
+        draw.line((64,  0, 64,  64), fill=(32,32,32))
+        draw.line((128, 0, 128, 64), fill=(32,32,32))
+        draw.line((192, 0, 192, 64), fill=(32,32,32))
 
-        draw.line((64, 0, 64, 64), fill=(32,32,32))
         plot_planets = [ 
             ("venus", (32,32,128), 1), 
             ("mars", (128,32,32), 1), 
@@ -206,9 +210,8 @@ class Weather:
             alt, az, distance = astrometric.apparent().altaz()
 
             if alt.degrees > 0.0:
-                x = int(az.degrees / 360.0 * 256) - 64
+                x = int(az.degrees / 360.0 * 256)
                 y = int(64 - (alt.degrees / 80.0 * 64))
-        
                 if planet_name == "moon":
                     phase = (((round(self._payload["daily"][0]["moon_phase"] * 8) % 8) + 11))
                     moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (self.image_cache, phase)).resize((12,12))
@@ -221,7 +224,7 @@ class Weather:
                     draw.line((x - 2 * size, y, x + 2 * size, y), fill=color, width=1)
                     draw.ellipse((x-size, y-size, x+size, y+size), fill=color)
 
-        return canvas.resize((64, 32), resample=Image.ANTIALIAS)
+        return canvas.resize((128, 32), resample=Image.ANTIALIAS)
 
     def extreme(self):
         txtImg = Image.new('RGBA', (32, 32), (0, 0, 0, 0))

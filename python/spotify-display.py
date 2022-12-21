@@ -175,24 +175,28 @@ async def main():
 
         # Nothing is playing
         else:
-            canvas = Image.new('RGBA', (64, 64), (0, 0, 0))
+            weather_canvas = Image.new('RGBA', (64, 64), (0, 0, 0))
             
             # Weather summary is always displayed
-            canvas.paste(weather.weather_summary(), (0, 0))
-            canvas.paste(weather.icon(), (32, 0))
+            weather_canvas.paste(weather.weather_summary(), (0, 0))
+            weather_canvas.paste(weather.icon(), (32, 0))
 
             # On large screens, show a small clock and the planet paths or a big clock
             if config["frame"].square:
                 if weather.night:
-                    canvas.alpha_composite(weather.planets(), dest=(0,32))
-                    canvas.alpha_composite(small_clock(), dest=(32, 0))
+                    t = int((time.time() % 300) * 128 / 300)
+                    p = weather.planets()
+                    weather_canvas.alpha_composite(p, dest=(t,32))
+                    weather_canvas.alpha_composite(p, dest=(t - 128,32))
+                    
+                    weather_canvas.alpha_composite(small_clock(), dest=(32, 0))
                 else:
-                    canvas.paste(clock(), (0,34))
+                    weather_canvas.paste(clock(), (0,34))
             # On small screens, show a small clock over the weather icon
             else:
-                canvas.alpha_composite(small_clock(), dest=(32,0))
+                weather_canvas.alpha_composite(small_clock(), dest=(32,0))
             
-            frame.swap(canvas.convert('RGB'))
+            frame.swap(weather_canvas.convert('RGB'))
 
         await asyncio.sleep(0)
 
