@@ -290,6 +290,10 @@ class Music:
     def image(self):
         return self.nowplaying().image
 
+    @property
+    def year(self):
+        return self.nowplaying().year
+
     def font(self, size=8):
         return ImageFont.truetype(config["config"]["fonts"]["music"], size)
 
