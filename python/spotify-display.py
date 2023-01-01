@@ -16,6 +16,7 @@ import music as musicimport
 from music import TrackError
 from config import config
 from colorsys import rgb_to_hsv, hsv_to_rgb
+import numpy
 
 config["config"] = configparser.ConfigParser()
 basepath = os.path.dirname(sys.argv[0])
@@ -109,20 +110,66 @@ def clock():
     mytime=datetime.now().strftime("%-I:%M")
 
     timeImg = Image.new('RGBA', (64, 30), (0,0,0,0))
+
     draw = ImageDraw.Draw(timeImg)
+    # draw.rectangle([(0,0), (64,30)], fill=config["weather"].temp_color())
 
-    draw.rectangle([(0,0), (64,30)], fill=config["weather"].temp_color())
-
-    t_width = getsize(font(22).getbbox(mytime))[0]
-    t_height = getsize(font(22).getbbox(mytime))[1]
+    t_width = getsize(font(18).getbbox(mytime))[0]
+    t_height = getsize(font(18).getbbox(mytime))[1]
 
     draw.fontmode = None
     draw.text((32 - (t_width >> 1) + 2, 10 - (t_height >> 1) + 2),
-            mytime, (0,0,0), font=font(22))
+            mytime, (0,0,0), font=font(18))
     draw.text((32 - (t_width >> 1), 10 - (t_height >> 1)),
-            mytime, brighten(config["weather"].temp_color()), font=font(22))
+            mytime, brighten(config["weather"].temp_color()), font=font(18))
 
     return timeImg
+
+def conway(dimensions = (64,64)):
+    w, h = dimensions
+    bitmap = [ numpy.zeros((w * h), dtype=numpy.uint8),
+               numpy.zeros((w * h), dtype=numpy.uint8) ]
+            
+    gen = 0
+        
+    while True:
+        if numpy.random.randint(0, 100) == 1:
+            z = numpy.random.randint(0, h)
+            for x in range(w):
+                bitmap[gen][z * w + x] = 255
+
+        if numpy.random.randint(0, 100) == 1:
+            z = numpy.random.randint(0, w)
+            for y in range(h):
+                bitmap[gen][z + y * w] = 255
+
+        yield Image.frombuffer("L", (w, h), bitmap[gen])
+
+        for z in range(w * h):
+            i = z % w
+            j = z // w
+            neighbors = 0
+            for x in range(-1, 2):
+                for y in range(-1, 2):
+                    if x == 0 and y == 0:
+                        continue
+                    d = ((i + x) % w) + ((j+y) % h) * w
+                    if bitmap[gen][d]:
+                        neighbors += 1
+
+            if bitmap[gen][z]:
+                if neighbors == 2 or neighbors == 3:
+                    bitmap[gen^1][z] = 255
+                else:
+                    bitmap[gen^1][z] = 0
+
+            else:
+                if neighbors == 3:
+                    bitmap[gen^1][z] = 255
+                else:
+                    bitmap[gen^1][z] = 0
+        
+        gen ^= 1
 
 async def main():
     weather = config["weather"]
@@ -175,29 +222,26 @@ async def main():
 
         # Nothing is playing
         else:
-            weather_canvas = Image.new('RGBA', (64, 64), (0, 0, 0))
-            
-            # Weather summary is always displayed
-            weather_canvas.paste(weather.weather_summary(), (0, 0))
-            weather_canvas.paste(weather.icon(), (32, 0))
-
+            weather_canvas = weather.w_canvas.copy()
+            r, g, b = hsluv_to_rgb([time.time() % 360, 25, 35])
+            conway_color = (int(r * 255), int(g * 255), int(b * 255))
             # On large screens, show a small clock and the planet paths or a big clock
             if config["frame"].square:
                 if weather.night:
-                    # t = int((time.time() % 300) * 128 / 300)
-                    t = t + 1
-                    p_canvas = weather.p_canvas.crop((t, 0, t + 128, 64)).resize((64, 32), resample=Image.Resampling.BILINEAR)
-                    weather_canvas.alpha_composite(p_canvas, dest=(0,32))
-                    
-                    weather_canvas.alpha_composite(small_clock(), dest=(32, 0))
+                    if weather._now["clouds"] > 0:
+                        weather_canvas.paste(weather.temp_color(), (0, 34), mask=next(conway_gen))
+                        weather_canvas.alpha_composite(clock(), dest=(0,34))
+                    else:
+                        t = t + 1
+                        p_canvas = weather.p_canvas.crop((t, 0, t + 128, 64)).resize((64, 32), resample=Image.Resampling.BILINEAR)
+                        weather_canvas.alpha_composite(p_canvas, dest=(0,32))
+                        weather_canvas.alpha_composite(small_clock(), dest=(32, 0))
                 else:
-                    weather_canvas.paste(clock(), (0,34))
+                    weather_canvas.paste(conway_color, (0, 34), mask=next(conway_gen))
+                    weather_canvas.alpha_composite(clock(), (0,34))
             # On small screens, show a small clock over the weather icon
             else:
                 weather_canvas.alpha_composite(small_clock(), dest=(32,0))
-                # t = t + 1
-                # p_canvas = weather.p_canvas.crop((t, 0, t + 128, 64)).resize((64, 32), resample=Image.Resampling.BILINEAR)
-                # weather_canvas.alpha_composite(p_canvas, dest=(0,0))
             
             frame.swap(weather_canvas.convert('RGB'))
 
@@ -207,6 +251,11 @@ async def update_weather():
     while True:
         delay = config["weather"]._update()
         await asyncio.sleep(delay)
+
+async def update_weather_summary():
+    while True:
+        config["weather"]._update_summary()
+        await asyncio.sleep(60)
 
 async def update_chromecast():
     while True:
@@ -231,6 +280,7 @@ async def update_spotify():
 async def metamain():
     await asyncio.gather(
         update_weather(),
+        update_weather_summary(),
         update_plex(),
         update_spotify(),
         update_chromecast(),
@@ -242,4 +292,5 @@ config["frame"] = Frame()
 config["weather"] = weatherimport.Weather(api_key=config["config"]["openweathermap"]["api_key"], image_cache=image_cache)
 config["music"] = musicimport.Music(devices=devices, image_cache=image_cache)
 
+conway_gen = conway((64, 34))
 asyncio.run(metamain())

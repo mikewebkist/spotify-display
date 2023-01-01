@@ -52,6 +52,7 @@ class Weather:
         self.api_key = api_key
         self.image_cache = image_cache
         self.p_canvas = None
+        self.w_canvas = Image.new('RGBA', (64, 64), (0, 0, 0))
     
     def font(self, size):
         return ImageFont.truetype(config["config"]["fonts"]["weather"], size)
@@ -73,6 +74,15 @@ class Weather:
             return 60 * 60
         else:
             return 60 * 15
+
+    def _update_summary(self):
+        self.w_canvas = Image.new('RGBA', (64, 64), (0, 0, 0))
+        
+        # Weather summary is always displayed
+        self.w_canvas.paste(self.weather_summary(), (0, 0))
+        self.w_canvas.paste(self.icon(), (32, 0))
+        draw = ImageDraw.Draw(self.w_canvas)
+        draw.rectangle([(0,34), (64,64)], fill=tuple(x >> 1 for x in self.temp_color()))
 
     @property
     def night(self):
