@@ -388,7 +388,7 @@ class Music:
                     if result["heos"]["result"] == "success":
                         self.playing["heos"].append(("Heos", HeosTrack(result["payload"])))
                         return min(x[1].recheck_in() for x in self.playing["heos"])
-        except (BrokenPipeError, TimeoutError, ConnectionResetError) as err:
+        except (KeyError, BrokenPipeError, TimeoutError, ConnectionResetError) as err:
             logger.error(err)
             
         return 120.0
