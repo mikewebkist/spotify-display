@@ -119,7 +119,7 @@ def clock():
 
     draw.fontmode = None
     draw.text((32 - (t_width >> 1) + 2, 10 - (t_height >> 1) + 2),
-            mytime, (0,0,0), font=font(18))
+            mytime, (0,0,0,128), font=font(18))
     draw.text((32 - (t_width >> 1), 10 - (t_height >> 1)),
             mytime, brighten(config["weather"].temp_color()), font=font(18))
 
@@ -127,24 +127,33 @@ def clock():
 
 def conway(dimensions = (64,64)):
     w, h = dimensions
-    bitmap = [ numpy.zeros((w * h), dtype=numpy.uint8),
-               numpy.zeros((w * h), dtype=numpy.uint8) ]
-            
+    bitmap = [ numpy.zeros((w * h * 4), dtype=numpy.uint8),
+               numpy.zeros((w * h * 4), dtype=numpy.uint8) ]
+    images = [  Image.frombuffer("RGBA", (w, h), bitmap[0]),
+                Image.frombuffer("RGBA", (w, h), bitmap[1]) ]        
     gen = 0
-        
+    
     while True:
+        r, g, b = hsluv_to_rgb([(time.time() % 20) * 18, 50, 30])
+        conway_color = (int(r * 255), int(g * 255), int(b * 255))
+        
         if numpy.random.randint(0, 100) == 1:
             z = numpy.random.randint(0, h)
             for x in range(w):
-                bitmap[gen][z * w + x] = 255
-
+                bitmap[gen][(z * w + x) * 4]     = conway_color[0]
+                bitmap[gen][(z * w + x) * 4 + 1] = conway_color[1]
+                bitmap[gen][(z * w + x) * 4 + 2] = conway_color[2]
+                bitmap[gen][(z * w + x) * 4 + 3] = 255
         if numpy.random.randint(0, 100) == 1:
             z = numpy.random.randint(0, w)
             for y in range(h):
-                bitmap[gen][z + y * w] = 255
+                bitmap[gen][(z + y * w) * 4]     = conway_color[0]
+                bitmap[gen][(z + y * w) * 4 + 1] = conway_color[1]
+                bitmap[gen][(z + y * w) * 4 + 2] = conway_color[2]
+                bitmap[gen][(z + y * w) * 4 + 3] = 255
 
-        yield Image.frombuffer("L", (w, h), bitmap[gen])
-
+        yield images[gen]
+        
         for z in range(w * h):
             i = z % w
             j = z // w
@@ -153,21 +162,30 @@ def conway(dimensions = (64,64)):
                 for y in range(-1, 2):
                     if x == 0 and y == 0:
                         continue
-                    d = ((i + x) % w) + ((j+y) % h) * w
-                    if bitmap[gen][d]:
+                    d = (((i + x) % w) + ((j+y) % h) * w) * 4
+
+                    if bitmap[gen][d + 3]:
                         neighbors += 1
 
-            if bitmap[gen][z]:
+            if bitmap[gen][z * 4 + 3]:
                 if neighbors == 2 or neighbors == 3:
-                    bitmap[gen^1][z] = 255
+                    # Don't change the color if it's already on
+                    bitmap[gen^1][z * 4]     = bitmap[gen][z * 4]
+                    bitmap[gen^1][z * 4 + 1] = bitmap[gen][z * 4 + 1]
+                    bitmap[gen^1][z * 4 + 2] = bitmap[gen][z * 4 + 2]
+                    bitmap[gen^1][z * 4 + 3] = 255
                 else:
-                    bitmap[gen^1][z] = 0
+                    bitmap[gen^1][z * 4 + 3] = 0
 
             else:
-                if neighbors == 3:
-                    bitmap[gen^1][z] = 255
+                if neighbors == 3 or neighbors == 6:
+                    # Turn on a new cell with the current color
+                    bitmap[gen^1][z * 4]     = conway_color[0]
+                    bitmap[gen^1][z * 4 + 1] = conway_color[1]
+                    bitmap[gen^1][z * 4 + 2] = conway_color[2]
+                    bitmap[gen^1][z * 4 + 3] = 255
                 else:
-                    bitmap[gen^1][z] = 0
+                    bitmap[gen^1][z * 4 + 3] = 0
         
         gen ^= 1
 
@@ -223,13 +241,13 @@ async def main():
         # Nothing is playing
         else:
             weather_canvas = weather.w_canvas.copy()
-            r, g, b = hsluv_to_rgb([time.time() % 360, 25, 35])
-            conway_color = (int(r * 255), int(g * 255), int(b * 255))
-            # On large screens, show a small clock and the planet paths or a big clock
+            # On large screens, show a small clock and the planets 
+            # or a big clock and conway's game of life if cloudy
+            # or daytime
             if config["frame"].square:
                 if weather.night:
                     if weather._now["clouds"] > 0:
-                        weather_canvas.paste(weather.temp_color(), (0, 34), mask=next(conway_gen))
+                        weather_canvas.alpha_composite(next(conway_gen), (0, 34))
                         weather_canvas.alpha_composite(clock(), dest=(0,34))
                     else:
                         t = t + 1
@@ -237,8 +255,8 @@ async def main():
                         weather_canvas.alpha_composite(p_canvas, dest=(0,32))
                         weather_canvas.alpha_composite(small_clock(), dest=(32, 0))
                 else:
-                    weather_canvas.paste(conway_color, (0, 34), mask=next(conway_gen))
-                    weather_canvas.alpha_composite(clock(), (0,34))
+                    weather_canvas.alpha_composite(next(conway_gen), (0, 34))
+                    weather_canvas.alpha_composite(clock(), dest=(0,34))
             # On small screens, show a small clock over the weather icon
             else:
                 weather_canvas.alpha_composite(small_clock(), dest=(32,0))

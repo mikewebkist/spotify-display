@@ -333,7 +333,7 @@ class Music:
             return 30.0
         except requests.exceptions.ConnectionError as err:
             logger.info(f"Plex server ConnectionError: {err}")
-            return 30.0
+            return 5.0
         except (AttributeError, requests.exceptions.ReadTimeout) as err:
             logger.error(f"Plex server error: {err}")
             return 30.0
