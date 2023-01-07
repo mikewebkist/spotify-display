@@ -127,45 +127,35 @@ def clock():
 
 def conway(dimensions = (64,64)):
     w, h = dimensions
+    gen = 0
+    color_cycle = 50
+    conway_color = [(0,0,0)] * color_cycle
+    for t in range(color_cycle):
+        r, g, b = hsluv_to_rgb([t * (360.0 / color_cycle), 50, 30])
+        conway_color[t] = (int(r * 255), int(g * 255), int(b * 255))
+
     bitmap = [ numpy.zeros((w * h * 4), dtype=numpy.uint8),
                numpy.zeros((w * h * 4), dtype=numpy.uint8) ]
+
+    for x in range(w * h):
+        if numpy.random.randint(0, 5) == 1:
+            bitmap[gen][x * 4]     = conway_color[int(time.time() - 5) % color_cycle][0]
+            bitmap[gen][x * 4 + 1] = conway_color[int(time.time() - 5) % color_cycle][1]
+            bitmap[gen][x * 4 + 2] = conway_color[int(time.time() - 5) % color_cycle][2]
+            bitmap[gen][x * 4 + 3] = 255
+
     images = [  Image.frombuffer("RGBA", (w, h), bitmap[0]),
                 Image.frombuffer("RGBA", (w, h), bitmap[1]) ]        
-    gen = 0
-    
+
+
     while True:
-        r, g, b = hsluv_to_rgb([(time.time() % 20) * 18, 50, 30])
-        conway_color = (int(r * 255), int(g * 255), int(b * 255))
-        
-        if numpy.random.randint(0, 100) == 1:
-            z = numpy.random.randint(0, h)
-            for x in range(w):
-                bitmap[gen][(z * w + x) * 4]     = conway_color[0]
-                bitmap[gen][(z * w + x) * 4 + 1] = conway_color[1]
-                bitmap[gen][(z * w + x) * 4 + 2] = conway_color[2]
-                bitmap[gen][(z * w + x) * 4 + 3] = 255
-        if numpy.random.randint(0, 100) == 1:
-            z = numpy.random.randint(0, w)
-            for y in range(h):
-                bitmap[gen][(z + y * w) * 4]     = conway_color[0]
-                bitmap[gen][(z + y * w) * 4 + 1] = conway_color[1]
-                bitmap[gen][(z + y * w) * 4 + 2] = conway_color[2]
-                bitmap[gen][(z + y * w) * 4 + 3] = 255
+        i_color = conway_color[int(time.time()) % color_cycle]
 
-        yield images[gen]
-        
         for z in range(w * h):
-            i = z % w
-            j = z // w
             neighbors = 0
-            for x in range(-1, 2):
-                for y in range(-1, 2):
-                    if x == 0 and y == 0:
-                        continue
-                    d = (((i + x) % w) + ((j+y) % h) * w) * 4
-
-                    if bitmap[gen][d + 3]:
-                        neighbors += 1
+            for g in [-1, 1, -w, w, -w-1, -w+1, w-1, w+1]:
+                if bitmap[gen][((z + g) % (w * h)) * 4 + 3]:
+                    neighbors += 1
 
             if bitmap[gen][z * 4 + 3]:
                 if neighbors == 2 or neighbors == 3:
@@ -180,14 +170,33 @@ def conway(dimensions = (64,64)):
             else:
                 if neighbors == 3 or neighbors == 6:
                     # Turn on a new cell with the current color
-                    bitmap[gen^1][z * 4]     = conway_color[0]
-                    bitmap[gen^1][z * 4 + 1] = conway_color[1]
-                    bitmap[gen^1][z * 4 + 2] = conway_color[2]
+                    bitmap[gen^1][z * 4]     = i_color[0]
+                    bitmap[gen^1][z * 4 + 1] = i_color[1]
+                    bitmap[gen^1][z * 4 + 2] = i_color[2]
                     bitmap[gen^1][z * 4 + 3] = 255
                 else:
                     bitmap[gen^1][z * 4 + 3] = 0
-        
+
         gen ^= 1
+
+        if numpy.random.randint(0, 50) == 1:
+            i_color = conway_color[int(time.time() + 5) % color_cycle]
+            z = numpy.random.randint(0, h)
+            for x in range(w):
+                bitmap[gen][(z * w + x) * 4]     = i_color[0]
+                bitmap[gen][(z * w + x) * 4 + 1] = i_color[1]
+                bitmap[gen][(z * w + x) * 4 + 2] = i_color[2]
+                bitmap[gen][(z * w + x) * 4 + 3] = 255
+        elif numpy.random.randint(0, 50) == 1:
+            i_color = conway_color[int(time.time() + 10) % color_cycle]
+            z = numpy.random.randint(0, w)
+            for y in range(h):
+                bitmap[gen][(z + y * w) * 4]     = i_color[0]
+                bitmap[gen][(z + y * w) * 4 + 1] = i_color[1]
+                bitmap[gen][(z + y * w) * 4 + 2] = i_color[2]
+                bitmap[gen][(z + y * w) * 4 + 3] = 255
+
+        yield images[gen]        
 
 async def main():
     weather = config["weather"]
