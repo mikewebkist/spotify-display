@@ -152,30 +152,31 @@ def conway(dimensions = (64,64)):
         i_color = conway_color[int(time.time()) % color_cycle]
 
         for z in range(w * h):
+            z_s = z * 4
             neighbors = 0
             for g in [-1, 1, -w, w, -w-1, -w+1, w-1, w+1]:
                 if bitmap[gen][((z + g) % (w * h)) * 4 + 3]:
                     neighbors += 1
 
-            if bitmap[gen][z * 4 + 3]:
+            if bitmap[gen][z_s + 3]:
                 if neighbors == 2 or neighbors == 3:
                     # Don't change the color if it's already on
-                    bitmap[gen^1][z * 4]     = bitmap[gen][z * 4]
-                    bitmap[gen^1][z * 4 + 1] = bitmap[gen][z * 4 + 1]
-                    bitmap[gen^1][z * 4 + 2] = bitmap[gen][z * 4 + 2]
-                    bitmap[gen^1][z * 4 + 3] = 255
+                    bitmap[gen^1][z_s]     = bitmap[gen][z_s]
+                    bitmap[gen^1][z_s + 1] = bitmap[gen][z_s + 1]
+                    bitmap[gen^1][z_s + 2] = bitmap[gen][z_s + 2]
+                    bitmap[gen^1][z_s + 3] = 255
                 else:
-                    bitmap[gen^1][z * 4 + 3] = 0
+                    bitmap[gen^1][z_s + 3] = 0
 
             else:
                 if neighbors == 3 or neighbors == 6:
                     # Turn on a new cell with the current color
-                    bitmap[gen^1][z * 4]     = i_color[0]
-                    bitmap[gen^1][z * 4 + 1] = i_color[1]
-                    bitmap[gen^1][z * 4 + 2] = i_color[2]
-                    bitmap[gen^1][z * 4 + 3] = 255
+                    bitmap[gen^1][z_s]     = i_color[0]
+                    bitmap[gen^1][z_s + 1] = i_color[1]
+                    bitmap[gen^1][z_s + 2] = i_color[2]
+                    bitmap[gen^1][z_s + 3] = 255
                 else:
-                    bitmap[gen^1][z * 4 + 3] = 0
+                    bitmap[gen^1][z_s + 3] = 0
 
         gen ^= 1
 
