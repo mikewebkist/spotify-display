@@ -269,9 +269,9 @@ async def main():
                         weather_canvas.alpha_composite(next(conway_gen), (0, 34))
                         weather_canvas.alpha_composite(clock(), dest=(0,34))
                     else:
-                        t = t + 1
-                        p_canvas = weather.p_canvas.crop((t, 0, t + 128, 64)).resize((64, 32), resample=Image.Resampling.BILINEAR)
-                        weather_canvas.alpha_composite(p_canvas, dest=(0,32))
+                        # p_canvas = weather.p_canvas.crop((t, 0, t + 128, 64)).resize((64, 32), resample=Image.Resampling.BILINEAR)
+                        weather_canvas.alpha_composite(next(conway_gen), (0, 34))
+                        # weather_canvas.alpha_composite(p_canvas, dest=(0,32))
                         weather_canvas.alpha_composite(small_clock(), dest=(32, 0))
                 else:
                     weather_canvas.alpha_composite(next(conway_gen), (0, 34))
