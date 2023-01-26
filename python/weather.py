@@ -81,8 +81,6 @@ class Weather:
         # Weather summary is always displayed
         self.w_canvas.alpha_composite(self.weather_summary(), (0, 0))
         self.w_canvas.alpha_composite(self.icon(), (32, 0))
-        # draw = ImageDraw.Draw(self.w_canvas)
-        # draw.rectangle([(0,34), (64,64)], fill=tuple(x >> 1 for x in self.temp_color()))
 
     @property
     def night(self):

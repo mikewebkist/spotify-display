@@ -12,8 +12,6 @@ import urllib
 import requests
 from plexapi.server import PlexServer
 import plexapi
-import random
-from datetime import datetime
 from time import time
 from config import config
 from heospy import HeosPlayer
