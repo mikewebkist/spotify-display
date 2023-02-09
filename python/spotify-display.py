@@ -2,92 +2,34 @@
 
 from hsluv import hsluv_to_rgb, hpluv_to_rgb
 import asyncio
-import configparser
 from datetime import datetime
 import logging
 import time
-import sys
-import os
-import os.path
-from rgbmatrix import RGBMatrix, RGBMatrixOptions
 from PIL import Image, ImageEnhance, ImageFont, ImageDraw
 import weather as weatherimport
 import music as musicimport
+import frame as frameimport
 from music import TrackError
-from config import config
 from colorsys import rgb_to_hsv, hsv_to_rgb
 import numpy
+import config
 
-config["config"] = configparser.ConfigParser()
-basepath = os.path.dirname(sys.argv[0])
-if basepath == "":
-    basepath = "."
-
-if len(sys.argv) > 1:
-    configfile = sys.argv[1]
-else:
-    configfile = "%s/local.config" % basepath
-
-config["config"].read(configfile)
-
-try:
-    devices = config["config"]["chromecast"]["devices"].split(", ")
-except KeyError:
-    devices = False
-
-image_cache = "%s/imagecache" % (basepath)
+# try:
+#     devices = config["config"]["chromecast"]["devices"].split(", ")
+# except KeyError:
+#     devices = False
 
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
   
 def font(size):
-    return ImageFont.truetype(config["config"]["fonts"]["time"], size)
+    return ImageFont.truetype(config.config["fonts"]["time"], size)
 
 def hpluv2rgb(h,s,v):
     return tuple(int(i * 256) for i in hpluv_to_rgb([h, s , v]))
 
 def hsluv2rgb(h,s,v):
     return tuple(int(i * 256) for i in hsluv_to_rgb([h, s , v]))
-
-class Frame:
-    def __init__(self):
-        self.options = RGBMatrixOptions()
-        self.options.brightness = int(config["config"]["matrix"]["brightness"])
-        self.options.hardware_mapping = "adafruit-hat-pwm"
-        self.options.rows = int(config["config"]["matrix"]["height"])
-        self.options.cols = int(config["config"]["matrix"]["width"])
-        self.gamma = lambda value : round(pow(value / 255.0, float(config["config"]["matrix"]["gamma"])) * 255.0)
-        
-        self.count = 0
-        self.t0 = time.time()
-
-        self.matrix = RGBMatrix(options=self.options)
-        self.offscreen_canvas = self.matrix.CreateFrameCanvas()
-        self.width = self.options.cols - int(config["config"]["matrix"]["padding_left"])
-        self.height = self.options.rows - int(config["config"]["matrix"]["padding_top"])
-    
-    @property
-    def square(self):
-        return self.options.cols == self.options.rows
-
-    def swap(self, canvas):
-        self.count += 1
-        padding_left = int(config["config"]["matrix"]["padding_left"])
-        padding_top = int(config["config"]["matrix"]["padding_top"])
-
-        canvas = Image.eval(canvas, self.gamma)
-
-        if config["weather"].night:
-            canvas = ImageEnhance.Brightness(canvas).enhance(0.5)
-
-        self.offscreen_canvas.SetImage(canvas, padding_left, padding_top)
-        self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
-
-    def fps(self):
-        t1 = time.time()
-        logger.warning("FPS: %0.2f (%d in %0.2f secs)" % (self.count / (t1 - self.t0), self.count, (t1 - self.t0)))
-        self.t0 = t1
-        self.count = 0
 
 def brighten(rgb):
     r, g, b = rgb
@@ -102,7 +44,7 @@ def getsize(bbox):
 def small_clock():
     timeImg = Image.new('RGBA', (32, 32), (0,0,0,0))
     draw = ImageDraw.Draw(timeImg)
-    color = brighten(config["weather"].temp_color())
+    color = brighten(weather.temp_color())
     draw.fontmode = None
     
     t_width, t_height = getsize(font(18).getbbox(datetime.now().strftime("%I")))
@@ -130,7 +72,7 @@ def clock():
     draw.text((32 - (t_width >> 1) + 2, 10 - (t_height >> 1) + 2),
             mytime, (0,0,0,128), font=font(18))
     draw.text((32 - (t_width >> 1), 10 - (t_height >> 1)),
-            mytime, brighten(config["weather"].temp_color()), font=font(18))
+            mytime, brighten(weather.temp_color()), font=font(18))
 
     return timeImg
 
@@ -209,9 +151,6 @@ def conway(dimensions = (64,64)):
         yield images[gen]        
 
 async def main():
-    weather = config["weather"]
-    music = config["music"]
-    frame = config["frame"]
     txtImg = None
     canvas = None
 
@@ -263,7 +202,7 @@ async def main():
             # On large screens, show a small clock and the planets 
             # or a big clock and conway's game of life if cloudy
             # or daytime
-            if config["frame"].square:
+            if frame.square:
                 if weather.night:
                     if weather._now["clouds"] > 0:
                         weather_canvas.alpha_composite(next(conway_gen), (0, 34))
@@ -286,37 +225,37 @@ async def main():
 
 async def update_weather():
     while True:
-        delay = config["weather"]._update()
+        delay = weather._update()
         await asyncio.sleep(delay)
 
 async def update_weather_summary():
     while True:
-        config["weather"]._update_summary()
+        weather._update_summary()
         await asyncio.sleep(60)
 
 async def update_chromecast():
     while True:
-        delay = config["music"].get_playing_chromecast()
+        delay = music.get_playing_chromecast()
         await asyncio.sleep(delay)
 
 async def update_plex():
     while True:
-        delay = config["music"].get_playing_plex()
+        delay = music.get_playing_plex()
         await asyncio.sleep(delay)
 
 async def update_heos():
     while True:
-        delay = config["music"].get_playing_heos()
+        delay = music.get_playing_heos()
         await asyncio.sleep(delay)
 
 async def update_spotify():
     while True:
-        delay = config["music"].get_playing_spotify()
+        delay = music.get_playing_spotify()
         await asyncio.sleep(delay)
 
 async def fps_display():
     while True:
-        config["frame"].fps()
+        frame.fps()
         await asyncio.sleep(60.0)
 
 async def metamain():
@@ -331,9 +270,9 @@ async def metamain():
         main()
     )
 
-config["frame"] = Frame()
-config["weather"] = weatherimport.Weather(api_key=config["config"]["openweathermap"]["api_key"], image_cache=image_cache)
-config["music"] = musicimport.Music(devices=devices, image_cache=image_cache)
+frame = frameimport.Frame()
+weather = weatherimport.Weather()
+music = musicimport.Music()
 
 conway_gen = conway((64, 34))
 asyncio.run(metamain())

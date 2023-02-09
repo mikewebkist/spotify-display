@@ -13,7 +13,7 @@ import requests
 from plexapi.server import PlexServer
 import plexapi
 from time import time
-from config import config
+import config
 from heospy import HeosPlayer
 
 logger = logging.getLogger(__name__)
@@ -110,10 +110,10 @@ class Track:
             logger.warning(f"Image too bright for the matrix: {avg:.0f}")
             image = ImageEnhance.Brightness(image).enhance(max / avg)
 
-        if not config["frame"].square:
-            cover = Image.new('RGBA', (64, 32), (0,0,0))
-            cover.paste(image.resize((config["frame"].height, config["frame"].height), Image.LANCZOS), (64 - config["frame"].height,0))
-            image = cover.convert('RGBA')
+        # if not config["frame"].square:
+        #     cover = Image.new('RGBA', (64, 32), (0,0,0))
+        #     cover.paste(image.resize((config["frame"].height, config["frame"].height), Image.LANCZOS), (64 - config["frame"].height,0))
+        #     image = cover.convert('RGBA')
 
         image = ImageEnhance.Color(image).enhance(0.75)
         self.albumArtCached = image.convert('RGBA')
@@ -152,8 +152,8 @@ class PlexTrack(Track):
         art_url = self.item.parentThumb or self.item.grandparentThumb
         if not art_url:
             return super().get_image()
-        url = config["config"]["plex"]["base"] + art_url
-        path = plexapi.utils.download(url, config["config"]["plex"]["token"], filename=str(self.album_id), savepath="/tmp")
+        url = config.config["plex"]["base"] + art_url
+        path = plexapi.utils.download(url, config.config["plex"]["token"], filename=str(self.album_id), savepath="/tmp")
         try:
             image = Image.open(path)
         except PIL.UnidentifiedImageError as err:
@@ -228,22 +228,22 @@ class HeosTrack(Track):
 
 class Music:
     def __init__(self, devices=None, image_cache=""):
-        self.plex = PlexServer(config["config"]["plex"]["base"], config["config"]["plex"]["token"])
-        self.plex_devices = config["config"]["plex"]["devices"].split(", ")
+        self.plex = PlexServer(config.config["plex"]["base"], config.config["plex"]["token"])
+        self.plex_devices = config.config["plex"]["devices"].split(", ")
         logger.warning("Plex: %s" % ", ".join(self.plex_devices))
 
         self.chromecasts = None
         try:
-            devices=config["config"]["chromecast"]["devices"].split(", ")
+            devices=config.config["chromecast"]["devices"].split(", ")
             self.chromecasts, self.browser = pychromecast.get_listed_chromecasts(friendly_names=devices)
             logger.warning("Chromecast: %s" % ", ".join(map(lambda x: x.name, self.chromecasts)))
         except KeyError:
             pass
         
-        spotify_cache = CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, config["config"]["spotify"]["username"]))
+        spotify_cache = CacheFileHandler(cache_path="%s/tokens/%s" % (basepath, config.config["spotify"]["username"]))
         self._spotify = spotipy.Spotify(auth_manager=SpotifyOAuth(
-                                        client_id=config["config"]["spotify"]["spotify_id"],
-                                        client_secret=config["config"]["spotify"]["spotify_secret"],
+                                        client_id=config.config["spotify"]["spotify_id"],
+                                        client_secret=config.config["spotify"]["spotify_secret"],
                                         cache_handler=spotify_cache,
                                         redirect_uri="http://localhost:8080/callback",
                                         show_dialog=True,
@@ -293,10 +293,10 @@ class Music:
         return self.nowplaying().year
 
     def font(self, size=8):
-        return ImageFont.truetype(config["config"]["fonts"]["music"], size)
+        return ImageFont.truetype(config.config["fonts"]["music"], size)
 
     def italic(self, size=8):
-        return ImageFont.truetype(config["config"]["fonts"]["music_italic"], size)
+        return ImageFont.truetype(config.config["fonts"]["music_italic"], size)
 
     def nowplaying(self):
         for type in ["heos", "plex", "cast", "spotify"]:
@@ -417,19 +417,18 @@ class Music:
         canvas = Image.new('RGBA', (64, 64), (0,0,0))
         canvas.paste(self.album_image(), (0, 0))
 
-        if config["weather"].steamy() or config["weather"].icy() or not config["frame"].square:
-            canvas.alpha_composite(config["weather"].extreme())
+        # if config["weather"].steamy() or config["weather"].icy() or not config["frame"].square:
+        #     canvas.alpha_composite(config["weather"].extreme())
 
         return canvas
 
     def layout_text(self):
         text = self.artist + "\n"
         text += f'"{self.track}"' + "\n"
-        if config["frame"].square:
-            if self.year:
-                text += f'{self.album} ({self.year})'
-            else:
-                text += self.album
+        if self.year:
+            text += f'{self.album} ({self.year})'
+        else:
+            text += self.album
 
         (l, t, r, b) = ImageDraw.Draw(Image.new('RGBA', (1, 1))).multiline_textbbox((0, -1), text, font=self.font(), spacing=0)
 

@@ -6,7 +6,7 @@ from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 from hsluv import hsluv_to_rgb
 from colorsys import rgb_to_hsv, hsv_to_rgb
 import os
-from config import config
+import config
 import logging
 from skyfield.api import load, N,W, wgs84
 from pytz import timezone
@@ -49,13 +49,13 @@ class Weather:
     api_url = "https://api.openweathermap.org/data/3.0/onecall?lat=39.9623348&lon=-75.1927043&appid="
     
     def __init__(self, api_key=None, image_cache=""):
-        self.api_key = api_key
-        self.image_cache = image_cache
+        self.api_key = config.config["openweathermap"]["api_key"]
+        self.image_cache = config.image_cache
         self.p_canvas = None
         self.w_canvas = Image.new('RGBA', (64, 64), (0, 0, 0))
     
     def font(self, size):
-        return ImageFont.truetype(config["config"]["fonts"]["weather"], size)
+        return ImageFont.truetype(config.config["fonts"]["weather"], size)
 
     def _update(self):
         try:
