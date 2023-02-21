@@ -34,6 +34,9 @@ class Frame:
 
         canvas = Image.eval(canvas, self.gamma)
 
+        if config.is_night():
+            canvas = ImageEnhance.Brightness(canvas).enhance(0.5)
+            
         # if self.config.weather.night:
         #     canvas = ImageEnhance.Brightness(canvas).enhance(0.5)
 
