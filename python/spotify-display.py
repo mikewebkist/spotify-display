@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import threading
 from hsluv import hsluv_to_rgb, hpluv_to_rgb
 import asyncio
 from datetime import datetime
@@ -65,14 +66,14 @@ def clock():
     draw = ImageDraw.Draw(timeImg)
     # draw.rectangle([(0,0), (64,30)], fill=config["weather"].temp_color())
 
-    t_width = getsize(font(18).getbbox(mytime))[0]
-    t_height = getsize(font(18).getbbox(mytime))[1]
+    t_width = getsize(font(16).getbbox(mytime))[0]
+    t_height = getsize(font(16).getbbox(mytime))[1]
 
     draw.fontmode = None
     draw.text((32 - (t_width >> 1) + 2, 10 - (t_height >> 1) + 2),
-            mytime, (0,0,0,128), font=font(18))
+            mytime, (0,0,0,128), font=font(16))
     draw.text((32 - (t_width >> 1), 10 - (t_height >> 1)),
-            mytime, brighten(weather.temp_color()), font=font(18))
+            mytime, brighten(weather.temp_color()), font=font(16))
 
     return timeImg
 
@@ -100,7 +101,7 @@ def conway(dimensions = (64,64)):
 
 
     while True:
-        i_color = conway_color[int(time.time()) % color_cycle]
+        red, green, blue = conway_color[int(time.time()) % color_cycle]
 
         for z in range(w * h):
             z_s = z * 4
@@ -122,9 +123,9 @@ def conway(dimensions = (64,64)):
             else:
                 if neighbors == 3 or neighbors == 6:
                     # Turn on a new cell with the current color
-                    bitmap[gen^1][z_s]     = i_color[0]
-                    bitmap[gen^1][z_s + 1] = i_color[1]
-                    bitmap[gen^1][z_s + 2] = i_color[2]
+                    bitmap[gen^1][z_s]     = red
+                    bitmap[gen^1][z_s + 1] = green
+                    bitmap[gen^1][z_s + 2] = blue
                     bitmap[gen^1][z_s + 3] = 255
                 else:
                     bitmap[gen^1][z_s + 3] = 0
@@ -132,21 +133,19 @@ def conway(dimensions = (64,64)):
         gen ^= 1
 
         if numpy.random.randint(0, 50) == 1:
-            i_color = conway_color[int(time.time() + 5) % color_cycle]
             z = numpy.random.randint(0, h)
             for x in range(w):
-                bitmap[gen][(z * w + x) * 4]     = i_color[0]
-                bitmap[gen][(z * w + x) * 4 + 1] = i_color[1]
-                bitmap[gen][(z * w + x) * 4 + 2] = i_color[2]
+                bitmap[gen][(z * w + x) * 4]     = 128
+                bitmap[gen][(z * w + x) * 4 + 1] = 128
+                bitmap[gen][(z * w + x) * 4 + 2] = 128
                 bitmap[gen][(z * w + x) * 4 + 3] = 255
-        elif numpy.random.randint(0, 50) == 1:
-            i_color = conway_color[int(time.time() + 10) % color_cycle]
-            z = numpy.random.randint(0, w)
-            for y in range(h):
-                bitmap[gen][(z + y * w) * 4]     = i_color[0]
-                bitmap[gen][(z + y * w) * 4 + 1] = i_color[1]
-                bitmap[gen][(z + y * w) * 4 + 2] = i_color[2]
-                bitmap[gen][(z + y * w) * 4 + 3] = 255
+        # elif numpy.random.randint(0, 50) == 1:
+        #     z = numpy.random.randint(0, w)
+        #     for y in range(h):
+        #         bitmap[gen][(z + y * w) * 4]     = 255
+        #         bitmap[gen][(z + y * w) * 4 + 1] = 0
+        #         bitmap[gen][(z + y * w) * 4 + 2] = 0
+        #         bitmap[gen][(z + y * w) * 4 + 3] = 255
 
         yield images[gen]        
 
@@ -190,21 +189,21 @@ async def main():
                     bg.alpha_composite(txtImg, dest=(frame.width - x, frame.height - txtImg.height))
                     frame.swap(bg.convert('RGB'))
                     time.sleep(0.01) # Don't release thread until scroll is done
-                await asyncio.sleep(1.0)
+                time.sleep(1.0)
             else:
                 bg = canvas.copy()
                 bg.alpha_composite(txtImg, dest=(0, frame.height - txtImg.height))
                 frame.swap(bg.convert('RGB'))
 
         # Nothing is playing
-        else:
+        elif weather._now: # because weather updates on a different thread, first run is tricky.
             weather_canvas = weather.w_canvas.copy()
             # On large screens, show a small clock and the planets 
             # or a big clock and conway's game of life if cloudy
             # or daytime
             if frame.square:
                 if weather.night:
-                    if weather._now["clouds"] > 0:
+                    if int(weather._now["clouds"]) > 10:
                         weather_canvas.alpha_composite(next(conway_gen), (0, 34))
                         weather_canvas.alpha_composite(clock(), dest=(0,34))
                     else:
@@ -258,7 +257,7 @@ async def fps_display():
         frame.fps()
         await asyncio.sleep(60.0)
 
-async def metamain():
+async def io_async():
     await asyncio.gather(
         update_weather(),
         update_weather_summary(),
@@ -266,13 +265,28 @@ async def metamain():
         update_spotify(),
         update_chromecast(),
         update_heos(),
-        fps_display(),
+        main(),
+        fps_display()
+    )
+
+async def main_async():
+    await asyncio.gather(
         main()
     )
 
 frame = frameimport.Frame()
 weather = weatherimport.Weather()
 music = musicimport.Music()
+conway_gen = conway((64, 30))
 
-conway_gen = conway((64, 34))
-asyncio.run(metamain())
+# Run all the update code in it's own thread.
+# io_thread = threading.Thread(target=lambda: asyncio.run(io_async()))
+# io_thread.start()
+
+asyncio.run(io_async())
+# asyncio.run(main_async())
+
+# main_thread = threading.Thread(target=lambda: asyncio.run(main_async()))
+# main_thread.start()
+
+# main_thread.join()
