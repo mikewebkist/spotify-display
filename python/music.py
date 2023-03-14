@@ -15,6 +15,9 @@ import plexapi
 from time import time
 import config
 from heospy import HeosPlayer
+import statsd
+
+statsd_client = statsd.StatsClient('localhost', 8125)
 
 logger = logging.getLogger(__name__)
 
@@ -308,6 +311,8 @@ class Music:
         # Reset playing objects
         self.playing["plex"] = []
 
+        statsd_client.incr("led-matrix.player_check,type=plex")
+
         try:
             for client in self.plex.clients():
                 if client.title not in self.plex_devices:
@@ -341,6 +346,8 @@ class Music:
     def get_playing_spotify(self):
         self.playing["spotify"] = []
 
+        statsd_client.incr("led-matrix.player_check,type=spotify")
+
         try:
             meta = self._spotify.current_user_playing_track()
         except (spotipy.exceptions.SpotifyException,
@@ -360,6 +367,9 @@ class Music:
     def get_playing_chromecast(self):
         self.playing["cast"] = []
 
+        statsd_client.incr("led-matrix.player_check,type=chromecast")
+
+
         for cast in self.chromecasts:
             cast.wait()
             if cast.media_controller.status.player_is_playing:
@@ -378,6 +388,8 @@ class Music:
     def get_playing_heos(self):
         self.playing["heos"] = []
 
+        statsd_client.incr("led-matrix.player_check,type=heos")
+
         try:
             result = self.heos.cmd("/player/get_play_state", {"pid": "223731818"})
             if result["heos"]["result"] == "success":
@@ -386,7 +398,7 @@ class Music:
                     if result["heos"]["result"] == "success":
                         self.playing["heos"].append(("Heos", HeosTrack(result["payload"])))
                         return min(x[1].recheck_in() for x in self.playing["heos"])
-        except (KeyError, BrokenPipeError, TimeoutError, ConnectionResetError) as err:
+        except (AttributeError, KeyError, BrokenPipeError, TimeoutError, ConnectionResetError) as err:
             logger.error(err)
             
         return 120.0

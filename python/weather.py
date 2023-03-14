@@ -11,6 +11,9 @@ import logging
 from skyfield.api import load, N,W, wgs84
 from pytz import timezone
 from datetime import datetime
+import statsd
+
+statsd_client = statsd.StatsClient('localhost', 8125)
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +56,15 @@ class Weather:
         self.image_cache = config.image_cache
         self.p_canvas = None
         self.w_canvas = Image.new('RGBA', (64, 64), (0, 0, 0))
+        self._now = None
     
     def font(self, size):
         return ImageFont.truetype(config.config["fonts"]["weather"], size)
 
     def _update(self):
+
+        statsd_client.incr("led-matrix.weather_check,type=openweather")
+
         try:
             r = urllib.request.urlopen(self.api_url + self.api_key)
         except (http.client.RemoteDisconnected, urllib.error.URLError) as err:

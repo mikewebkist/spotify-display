@@ -3,6 +3,9 @@ from PIL import Image, ImageEnhance, ImageFont, ImageDraw
 import config
 import logging
 import time
+import statsd
+
+statsd_client = statsd.StatsClient('localhost', 8125)
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +46,9 @@ class Frame:
         self.offscreen_canvas.SetImage(canvas, padding_left, padding_top)
         self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
 
-    def fps(self):
+    def fps(self):        
         t1 = time.time()
-        logger.warning("FPS: %0.2f (%d in %0.2f secs)" % (self.count / (t1 - self.t0), self.count, (t1 - self.t0)))
-        self.t0 = t1
+        fps = self.count / (t1 - self.t0)
+        statsd_client.gauge('led-matrix.fps', fps)
         self.count = 0
+        self.t0 = t1
