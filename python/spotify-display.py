@@ -66,16 +66,66 @@ def clock():
     draw = ImageDraw.Draw(timeImg)
     # draw.rectangle([(0,0), (64,30)], fill=config["weather"].temp_color())
 
-    t_width = getsize(font(16).getbbox(mytime))[0]
-    t_height = getsize(font(16).getbbox(mytime))[1]
+    t_width = getsize(font(18).getbbox(mytime))[0]
+    t_height = getsize(font(18).getbbox(mytime))[1]
 
     draw.fontmode = None
     draw.text((32 - (t_width >> 1) + 2, 10 - (t_height >> 1) + 2),
-            mytime, (0,0,0,128), font=font(16))
+            mytime, (0,0,0,128), font=font(18))
     draw.text((32 - (t_width >> 1), 10 - (t_height >> 1)),
-            mytime, brighten(weather.temp_color()), font=font(16))
+            mytime, brighten(weather.temp_color()), font=font(18))
 
     return timeImg
+
+def mandelbrot(c, max_iter):
+    z = c
+    n = 0
+    while abs(z) <= 2 and n < max_iter:
+        z = z*z + c
+        n += 1
+    if n == max_iter:
+        return 0
+    else:
+        return n
+
+def mandelbrot_set(in_xwidth, in_yheight, width, height, max_iter=256):
+    xcenter = -0.74797
+    ycenter = -0.072500001
+    # xcenter = -0.75
+    # ycenter = 0.1
+    xwidth = in_xwidth
+    yheight = in_yheight
+    k=0
+
+    while True:
+        xmin = xcenter - xwidth / 2
+        xmax = xcenter + xwidth / 2
+        ymin = ycenter - yheight / 2
+        ymax = ycenter + yheight / 2
+
+        image = Image.new('RGBA', (width, height), (0, 0, 0))
+        pixels = image.load()
+        r1 = numpy.linspace(xmin, xmax, width)
+        r2 = numpy.linspace(ymin, ymax, height)
+        for i in range(height):
+            for j in range(width):
+                c = complex(r1[j], r2[i])
+                color = mandelbrot(c, max_iter) >> 1
+                # pixels[j, i] = hsluv2rgb(color * 360.0 / max_iter, 50, 30)
+                pixels[j, i] = (color, color, color)
+
+        yield image
+        k += 1
+
+        if k > 100:
+            k = 0
+            xwidth = in_xwidth
+            yheight = in_yheight
+        else:
+            xwidth = xwidth * 0.9
+            yheight = yheight * 0.9
+            xcenter = xcenter + (numpy.random.random() - 0.5) * 0.001 * xwidth
+            ycenter = ycenter + (numpy.random.random() - 0.5) * 0.001 * yheight
 
 def conway(dimensions = (64,64)):
     w, h = dimensions
@@ -98,7 +148,6 @@ def conway(dimensions = (64,64)):
 
     images = [  Image.frombuffer("RGBA", (w, h), bitmap[0]),
                 Image.frombuffer("RGBA", (w, h), bitmap[1]) ]        
-
 
     while True:
         red, green, blue = conway_color[int(time.time()) % color_cycle]
@@ -135,17 +184,10 @@ def conway(dimensions = (64,64)):
         if numpy.random.randint(0, 50) == 1:
             z = numpy.random.randint(0, h)
             for x in range(w):
-                bitmap[gen][(z * w + x) * 4]     = 128
-                bitmap[gen][(z * w + x) * 4 + 1] = 128
-                bitmap[gen][(z * w + x) * 4 + 2] = 128
+                bitmap[gen][(z * w + x) * 4]     = 192
+                bitmap[gen][(z * w + x) * 4 + 1] = 64
+                bitmap[gen][(z * w + x) * 4 + 2] = 64
                 bitmap[gen][(z * w + x) * 4 + 3] = 255
-        # elif numpy.random.randint(0, 50) == 1:
-        #     z = numpy.random.randint(0, w)
-        #     for y in range(h):
-        #         bitmap[gen][(z + y * w) * 4]     = 255
-        #         bitmap[gen][(z + y * w) * 4 + 1] = 0
-        #         bitmap[gen][(z + y * w) * 4 + 2] = 0
-        #         bitmap[gen][(z + y * w) * 4 + 3] = 255
 
         yield images[gen]        
 
@@ -204,12 +246,10 @@ async def main():
             if frame.square:
                 if weather.night:
                     if int(weather._now["clouds"]) > 10:
-                        weather_canvas.alpha_composite(next(conway_gen), (0, 34))
+                        weather_canvas.alpha_composite(next(mandelbrot_gen), (0, 34))
                         weather_canvas.alpha_composite(clock(), dest=(0,34))
                     else:
-                        # p_canvas = weather.p_canvas.crop((t, 0, t + 128, 64)).resize((64, 32), resample=Image.Resampling.BILINEAR)
                         weather_canvas.alpha_composite(next(conway_gen), (0, 34))
-                        # weather_canvas.alpha_composite(p_canvas, dest=(0,32))
                         weather_canvas.alpha_composite(small_clock(), dest=(32, 0))
                 else:
                     weather_canvas.alpha_composite(next(conway_gen), (0, 34))
@@ -278,6 +318,7 @@ frame = frameimport.Frame()
 weather = weatherimport.Weather()
 music = musicimport.Music()
 conway_gen = conway((64, 30))
+mandelbrot_gen = mandelbrot_set(3, 2, 64, 30)
 
 # Run all the update code in it's own thread.
 # io_thread = threading.Thread(target=lambda: asyncio.run(io_async()))
