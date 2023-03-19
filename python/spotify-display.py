@@ -59,36 +59,45 @@ def small_clock():
     return timeImg
 
 def clock():
-    mytime=datetime.now().strftime("%-I:%M")
+    mytime=None
 
-    timeImg = Image.new('RGBA', (64, 30), (0,0,0,0))
+    while True:
+        now_time = datetime.now().strftime("%-I:%M")
+        if now_time != mytime:
+            timeImg = Image.new('RGBA', (64, 64), (0,0,0,0))
+            mytime = now_time
+        else:
+            yield timeImg
 
-    draw = ImageDraw.Draw(timeImg)
-    # draw.rectangle([(0,0), (64,30)], fill=config["weather"].temp_color())
+        draw = ImageDraw.Draw(timeImg)
 
-    t_width = getsize(font(18).getbbox(mytime))[0]
-    t_height = getsize(font(18).getbbox(mytime))[1]
+        t_width = getsize(font(18).getbbox(mytime))[0]
+        t_height = getsize(font(18).getbbox(mytime))[1]
+        # temp_color = weather.temp_color().append(255)
+        temp_color = (128,128,128,255)
 
-    draw.fontmode = None
-    draw.text((32 - (t_width >> 1) + 2, 10 - (t_height >> 1) + 2),
-            mytime, (0,0,0,128), font=font(18))
-    draw.text((32 - (t_width >> 1), 10 - (t_height >> 1)),
-            mytime, brighten(weather.temp_color()), font=font(18))
+        draw.fontmode = None
+        draw.rectangle((33 - (t_width >> 1), 48 - (t_height >> 1),
+                        33 + (t_width >> 1), 48 + (t_height >> 1)),
+                       fill=(0,0,0,192))
 
-    return timeImg
+        draw.text((32 - (t_width >> 1) + 2, 44 - (t_height >> 1) + 2),
+                mytime, (0,0,0,128), font=font(18))
+        draw.text((32 - (t_width >> 1), 44 - (t_height >> 1)),
+                mytime, temp_color, font=font(18))
+
+        yield timeImg
 
 def mandelbrot(c, max_iter):
     z = c
-    n = 0
-    while abs(z) <= 2 and n < max_iter:
-        z = z*z + c
-        n += 1
-    if n == max_iter:
-        return 0
-    else:
-        return n
+    for n in range(max_iter):
+        if abs(z) > 2:
+            return n
+        z = z**2 + c
 
-def mandelbrot_set(in_xwidth, in_yheight, width, height, max_iter=256):
+    return 0
+
+def mandelbrot_set(in_xwidth, in_yheight, width, height, max_iter=128):
     xcenter = -0.74797
     ycenter = -0.072500001
     # xcenter = -0.75
@@ -97,35 +106,37 @@ def mandelbrot_set(in_xwidth, in_yheight, width, height, max_iter=256):
     yheight = in_yheight
     k=0
 
+    image = Image.new('RGBA', (width, height), (0, 0, 0, 255))
+    pixels = image.load()
+
     while True:
-        xmin = xcenter - xwidth / 2
-        xmax = xcenter + xwidth / 2
-        ymin = ycenter - yheight / 2
-        ymax = ycenter + yheight / 2
+        for k in range(100):
+            xmin = xcenter - xwidth / 2
+            xmax = xcenter + xwidth / 2
+            ymin = ycenter - yheight / 2
+            ymax = ycenter + yheight / 2
 
-        image = Image.new('RGBA', (width, height), (0, 0, 0))
-        pixels = image.load()
-        r1 = numpy.linspace(xmin, xmax, width)
-        r2 = numpy.linspace(ymin, ymax, height)
-        for i in range(height):
-            for j in range(width):
-                c = complex(r1[j], r2[i])
-                color = mandelbrot(c, max_iter) >> 1
-                # pixels[j, i] = hsluv2rgb(color * 360.0 / max_iter, 50, 30)
-                pixels[j, i] = (color, color, color)
+            r1 = numpy.linspace(xmin, xmax, width)
+            r2 = numpy.linspace(ymin, ymax, height)
+            for i in range(height):
+                for j in range(width):
+                    c = complex(r1[j], r2[i])
+                    color = mandelbrot(c, max_iter)
+                    # pixels[j, i] = hsluv2rgb(color * 360.0 / max_iter, 50, 30)
+                    pixels[j, i] = (color, color, color)
 
-        yield image
-        k += 1
+            yield image
 
-        if k > 100:
-            k = 0
-            xwidth = in_xwidth
-            yheight = in_yheight
-        else:
+            # Zoom in by 10%
             xwidth = xwidth * 0.9
             yheight = yheight * 0.9
+
+            # Randomly move center by 0.1%
             xcenter = xcenter + (numpy.random.random() - 0.5) * 0.001 * xwidth
             ycenter = ycenter + (numpy.random.random() - 0.5) * 0.001 * yheight
+
+        xwidth = in_xwidth
+        yheight = in_yheight
 
 def conway(dimensions = (64,64)):
     w, h = dimensions
@@ -133,7 +144,7 @@ def conway(dimensions = (64,64)):
     color_cycle = 50
     conway_color = [(0,0,0)] * color_cycle
     for t in range(color_cycle):
-        r, g, b = hsluv_to_rgb([t * (360.0 / color_cycle), 50, 30])
+        r, g, b = hsluv_to_rgb([t * (360.0 / color_cycle), 50, 40])
         conway_color[t] = (int(r * 255), int(g * 255), int(b * 255))
 
     bitmap = [ numpy.zeros((w * h * 4), dtype=numpy.uint8),
@@ -245,20 +256,18 @@ async def main():
             # or daytime
             if frame.square:
                 if weather.night:
-                    if int(weather._now["clouds"]) > 10:
-                        weather_canvas.alpha_composite(next(mandelbrot_gen), (0, 34))
-                        weather_canvas.alpha_composite(clock(), dest=(0,34))
-                    else:
-                        weather_canvas.alpha_composite(next(conway_gen), (0, 34))
-                        weather_canvas.alpha_composite(small_clock(), dest=(32, 0))
+                    bg = Image.alpha_composite(frame.canvas, next(mandelbrot_gen))
                 else:
-                    weather_canvas.alpha_composite(next(conway_gen), (0, 34))
-                    weather_canvas.alpha_composite(clock(), dest=(0,34))
+                    bg = Image.alpha_composite(frame.canvas, next(conway_gen))
+
+                out = Image.alpha_composite(Image.alpha_composite(bg, weather_canvas), next(clock_gen))
+                frame.swap(out.convert('RGB'))
+
             # On small screens, show a small clock over the weather icon
             else:
                 weather_canvas.alpha_composite(small_clock(), dest=(32,0))
+                frame.swap(weather_canvas.convert('RGB'))
             
-            frame.swap(weather_canvas.convert('RGB'))
 
         await asyncio.sleep(0)
 
@@ -317,8 +326,9 @@ async def main_async():
 frame = frameimport.Frame()
 weather = weatherimport.Weather()
 music = musicimport.Music()
-conway_gen = conway((64, 30))
-mandelbrot_gen = mandelbrot_set(3, 2, 64, 30)
+conway_gen = conway((64, 64))
+mandelbrot_gen = mandelbrot_set(3, 3, 64, 64)
+clock_gen = clock()
 
 # Run all the update code in it's own thread.
 # io_thread = threading.Thread(target=lambda: asyncio.run(io_async()))

@@ -446,6 +446,6 @@ class Music:
 
         image = Image.new('RGBA', (r, b + 1), (0, 0, 0, 0))
         draw = ImageDraw.Draw(image)
-        draw.multiline_text((1, 1), text, fill=(0,0,0), font=self.font(), spacing=0)
-        draw.multiline_text((0, 0), text, fill=(255, 255, 255), font=self.font(), spacing=0)
+        draw.multiline_text((1, 1), text, fill=(0,0,0, 255), font=self.font(), spacing=0)
+        draw.multiline_text((0, 0), text, fill=(255, 255, 255, 255), font=self.font(), spacing=0)
         return image
