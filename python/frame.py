@@ -25,6 +25,7 @@ class Frame:
         self.offscreen_canvas = self.matrix.CreateFrameCanvas()
         self.width = self.options.cols - int(config.config["matrix"]["padding_left"])
         self.height = self.options.rows - int(config.config["matrix"]["padding_top"])
+        self.canvas = Image.new('RGBA', (self.width, self.height), (0,0,0,255))
     
     @property
     def square(self):

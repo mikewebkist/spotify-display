@@ -18,6 +18,8 @@ basepath = os.path.dirname(sys.argv[0])
 if basepath == "":
     basepath = "."
 
+frame = False
+
 if len(sys.argv) > 1:
     configfile = sys.argv[1]
 else:

@@ -426,11 +426,8 @@ class Music:
         return self.albumArtCached
 
     def canvas(self):
-        canvas = Image.new('RGBA', (64, 64), (0,0,0))
-        canvas.paste(self.album_image(), (0, 0))
-
-        # if config["weather"].steamy() or config["weather"].icy() or not config["frame"].square:
-        #     canvas.alpha_composite(config["weather"].extreme())
+        canvas = Image.new('RGBA', (config.frame.width, config.frame.height), (0,0,0))
+        canvas.paste(self.album_image().resize((config.frame.height, config.frame.height), Image.LANCZOS), (0, 0))
 
         return canvas
 
@@ -446,6 +443,6 @@ class Music:
 
         image = Image.new('RGBA', (r, b + 1), (0, 0, 0, 0))
         draw = ImageDraw.Draw(image)
-        draw.multiline_text((1, 1), text, fill=(0,0,0), font=self.font(), spacing=0)
-        draw.multiline_text((0, 0), text, fill=(255, 255, 255), font=self.font(), spacing=0)
+        draw.multiline_text((1, 1), text, fill=(0,0,0, 255), font=self.font(), spacing=0)
+        draw.multiline_text((0, 0), text, fill=(255, 255, 255, 255), font=self.font(), spacing=0)
         return image
