@@ -83,7 +83,7 @@ class Weather:
             return 60 * 15
 
     def _update_summary(self):
-        self.w_canvas = Image.new('RGBA', (64, 64), (0, 0, 0))
+        self.w_canvas = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
         
         # Weather summary is always displayed
         self.w_canvas.alpha_composite(self.weather_summary(), (0, 0))
@@ -100,13 +100,14 @@ class Weather:
             return temp_color(ktof(self._payload["current"]["temp"]))
         
     def icon(self):
-        iconBox = Image.new('RGBA', (32, 32), (0, 0, 0))
 
         if self.night:
             phase = (round(self._payload["daily"][0]["moon_phase"] * 8) % 8) + 11
             moonImage = Image.open("%s/Emojione_1F3%2.2d.svg.png" % (self.image_cache, phase)).resize((20,20))
             moonDim = ImageEnhance.Brightness(moonImage).enhance(0.75)
+            iconBox = Image.new('RGBA', (32, 32), (128, 128, 128, 0))
             iconBox.alpha_composite(moonDim, dest=(6, 6))
+            return iconBox
 
         else:
             url = "http://openweathermap.org/img/wn/%s.png" % (self._now["weather"][0]["icon"])
@@ -117,7 +118,7 @@ class Weather:
 
             iconImage = Image.open(filename)
             iconImage = iconImage.crop((3, 3, 45, 45)).resize((32, 32))
-            iconBox.alpha_composite(iconImage, dest=(0, 0))
+            return iconImage
 
         return iconBox
 
@@ -150,7 +151,7 @@ class Weather:
         return "%.1f\"" % (self._payload["current"]["pressure"] * 0.0295301)
 
     def weather_summary(self):
-        canvas = Image.new('RGBA', (64, 32), (0, 0, 0))
+        canvas = Image.new('RGBA', (64, 32), (0, 0, 0, 0))
         draw = ImageDraw.Draw(canvas)
         draw.fontmode = "1"
 
