@@ -86,7 +86,7 @@ class Weather:
         self.w_canvas = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
         
         draw = ImageDraw.Draw(self.w_canvas)
-        draw.rectangle([(0,0), (64,32)], fill=(0,0,0,64))
+        # draw.rectangle([(0,0), (64,32)], fill=(0,0,0,64))
 
         # Weather summary is always displayed
         self.w_canvas.alpha_composite(self.weather_summary(), (0, 0))

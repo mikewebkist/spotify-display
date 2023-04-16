@@ -79,7 +79,7 @@ def clock():
         draw.fontmode = None
         draw.rectangle((33 - (t_width >> 1), 48 - (t_height >> 1),
                         33 + (t_width >> 1), 48 + (t_height >> 1)),
-                       fill=(0,0,0,192))
+                       fill=(0,0,0,0))
 
         draw.text((32 - (t_width >> 1) + 2, 44 - (t_height >> 1) + 2),
                 mytime, (0,0,0,128), font=font(18))
@@ -228,25 +228,18 @@ async def main():
                 logger.warning("now playing album: %s - %s" % (music.nowplaying().artist, music.nowplaying().album))
                 for x in range(127):
                     bg = canvas.copy()
-                    if txtImg.width < frame.width:
-                        bg.alpha_composite(txtImg, dest=(0, frame.height - txtImg.height))
                     frame.swap(ImageEnhance.Brightness(bg).enhance(x * 2 / 255.0).convert('RGB'))
                     time.sleep(0.01) # Don't release thread until scroll is done
 
                 await asyncio.sleep(0)
 
             # If either line of text is longer than the display, scroll
-            if txtImg.width >= frame.width:
-                for x in range(txtImg.width + 10 + frame.width):
-                    bg = canvas.copy()
-                    bg.alpha_composite(txtImg, dest=(frame.width - x, frame.height - txtImg.height))
-                    frame.swap(bg.convert('RGB'))
-                    time.sleep(0.01) # Don't release thread until scroll is done
-                time.sleep(1.0)
-            else:
+            for x in range(txtImg.width + 10 + frame.width):
                 bg = canvas.copy()
-                bg.alpha_composite(txtImg, dest=(0, frame.height - txtImg.height))
+                bg.alpha_composite(txtImg, dest=(frame.width - x, frame.height - txtImg.height))
                 frame.swap(bg.convert('RGB'))
+                time.sleep(0.015) # Don't release thread until scroll is done
+            time.sleep(1.0)
 
         # Nothing is playing
         elif weather._now: # because weather updates on a different thread, first run is tricky.
