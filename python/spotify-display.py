@@ -43,18 +43,18 @@ def getsize(bbox):
     return (bbox[2] - bbox[0], bbox[3] - bbox[1])
 
 def small_clock():
-    timeImg = Image.new('RGBA', (32, 32), (0,0,0,0))
+    timeImg = Image.new('RGBA', (64, 32), (0,0,0,0))
     draw = ImageDraw.Draw(timeImg)
     color = brighten(weather.temp_color())
-    draw.fontmode = None
+    draw.fontmode = "1"
     
     t_width, t_height = getsize(font(18).getbbox(datetime.now().strftime("%I")))
-    draw.text((17 - (t_width >> 1), 5 - (t_height >> 1) + 1), datetime.now().strftime("%I"), (0,0,0), font=font(18))
-    draw.text((16 - (t_width >> 1), 4 - (t_height >> 1) + 1), datetime.now().strftime("%I"), color, font=font(18))
+    draw.text((49 - (t_width >> 1), 5 - (t_height >> 1) + 1), datetime.now().strftime("%I"), (0,0,0,192), font=font(17))
+    draw.text((48 - (t_width >> 1), 4 - (t_height >> 1) + 1), datetime.now().strftime("%I"), color, font=font(17))
 
     t_width, t_height = getsize(font(18).getbbox(datetime.now().strftime("%M")))
-    draw.text((17 - (t_width >> 1), 20 - (t_height >> 1) + 1), datetime.now().strftime("%M"), (0,0,0), font=font(18))
-    draw.text((16 - (t_width >> 1), 19 - (t_height >> 1) + 1), datetime.now().strftime("%M"), color, font=font(18))
+    draw.text((49 - (t_width >> 1), 20 - (t_height >> 1) + 1), datetime.now().strftime("%M"), (0,0,0,192), font=font(17))
+    draw.text((48 - (t_width >> 1), 19 - (t_height >> 1) + 1), datetime.now().strftime("%M"), color, font=font(17))
 
     return timeImg
 
@@ -258,8 +258,8 @@ async def main():
 
             # On small screens, show a small clock over the weather icon
             else:
-                weather_canvas.alpha_composite(small_clock(), dest=(32,0))
-                frame.swap(weather_canvas.convert('RGB'))
+                out = Image.alpha_composite(Image.alpha_composite(frame.canvas, weather_canvas.crop((0,0,64,32))), small_clock())
+                frame.swap(out.convert('RGB'))
             
 
         await asyncio.sleep(0)
