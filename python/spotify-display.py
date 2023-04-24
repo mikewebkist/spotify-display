@@ -97,7 +97,7 @@ def mandelbrot(c, max_iter):
 
     return 0
 
-def mandelbrot_set(in_xwidth, in_yheight, width, height, max_iter=128):
+def mandelbrot_set(in_xwidth, in_yheight, width, height, max_iter=64):
     xcenter = -0.74797
     ycenter = -0.072500001
     # xcenter = -0.75
@@ -110,7 +110,12 @@ def mandelbrot_set(in_xwidth, in_yheight, width, height, max_iter=128):
     pixels = image.load()
 
     while True:
-        for k in range(100):
+        color_shift = int(numpy.random.random() * max_iter)
+        colormap = [ hsluv2rgb(((i + color_shift) % max_iter) * 360.0 / max_iter, 55, 20) for i in range(max_iter) ]
+        colormap[0] = (0,0,0)
+        colormap[-1] = (0,0,0)
+
+        for k in range(75):
             xmin = xcenter - xwidth / 2
             xmax = xcenter + xwidth / 2
             ymin = ycenter - yheight / 2
@@ -122,14 +127,17 @@ def mandelbrot_set(in_xwidth, in_yheight, width, height, max_iter=128):
                 for j in range(width):
                     c = complex(r1[j], r2[i])
                     color = mandelbrot(c, max_iter)
-                    # pixels[j, i] = hsluv2rgb(color * 360.0 / max_iter, 50, 30)
-                    pixels[j, i] = (color, color, color)
+                    if color == 0:
+                        pixels[j, i] = (0,0,0)
+                    else:
+                        pixels[j, i] = colormap[color]
+                    # pixels[j, i] = (color, color, color)
 
             yield image
 
             # Zoom in by 10%
-            xwidth = xwidth * 0.9
-            yheight = yheight * 0.9
+            xwidth = xwidth * 0.975
+            yheight = yheight * 0.975
 
             # Randomly move center by 0.1%
             xcenter = xcenter + (numpy.random.random() - 0.5) * 0.001 * xwidth
